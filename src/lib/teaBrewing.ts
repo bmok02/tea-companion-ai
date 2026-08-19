@@ -89,7 +89,7 @@ export function parseBrewSteps(tea: Tea | { description: string; name: string })
   // Preheat
   steps.push({
     label: "Warm your teaware",
-    sub: "Fill your teapot and cups with hot water, swirl gently, then pour it away. This keeps the temperature stable so your tea brews evenly.",
+    sub: "Swirl hot water in your teapot and cups, then pour it out. This warms the teaware for an even brew.",
     seconds: 0,
   });
 
@@ -98,7 +98,7 @@ export function parseBrewSteps(tea: Tea | { description: string; name: string })
   const weight = weightMatch ? weightMatch[1] + "g" : "5–7g";
   steps.push({
     label: "Measure your tea leaves",
-    sub: `Add about ${weight} of loose leaves into your teapot or gaiwan. A rough guide: enough to loosely cover the bottom of the vessel.`,
+    sub: `Add about ${weight} of loose leaves — enough to loosely cover the bottom of the pot or gaiwan.`,
     seconds: 0,
   });
 
@@ -106,7 +106,7 @@ export function parseBrewSteps(tea: Tea | { description: string; name: string })
   if (hasRinse && !isGreen) {
     steps.push({
       label: "Rinse the leaves (quick wash)",
-      sub: "Pour hot water over the leaves to fill the pot, then immediately pour it away — do not drink this. This opens the leaves and removes any dust. It takes only 5–8 seconds.",
+      sub: "Fill the pot with hot water, then pour it straight out — don't drink this. It opens the leaves and rinses off dust.",
       seconds: 8,
     });
   }
@@ -156,14 +156,14 @@ export function parseBrewSteps(tea: Tea | { description: string; name: string })
     const timeStr = formatBrewTime(secs);
     const sub =
       num === 1
-        ? `Fill the pot with hot water and let the leaves sit for ${timeStr}. When done, pour all the tea into your cups — don't leave it sitting or it'll over-brew.`
-        : `Fill the pot again and steep for ${timeStr}. Each steep draws out different flavours — notice how it changes from the last cup.`;
+        ? `Fill the pot with hot water and steep for ${timeStr}. Then pour it all out — don't let it over-brew.`
+        : `Fill the pot again and steep for ${timeStr}. Notice how the flavour shifts from the last cup.`;
     steps.push({ label, sub, seconds: secs });
   }
 
   steps.push({
     label: "Pour & enjoy your tea",
-    sub: "Pour steadily in a circular motion to fill each cup evenly. Hold the cup with both hands, breathe in the aroma, then take your first sip slowly.",
+    sub: "Pour in a circular motion to fill each cup evenly. Breathe in the aroma, then sip slowly.",
     seconds: 0,
   });
   return steps;

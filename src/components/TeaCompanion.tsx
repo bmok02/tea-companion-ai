@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ChatArea from "./ChatArea";
 import BrewModal from "./BrewModal";
 import BrewMini from "./BrewMini";
-import { TEA_OPTIONS } from "@/lib/teaOptions";
+import { TEA_OPTIONS, TeaOption } from "@/lib/teaOptions";
 import { findTea, buildSystemPrompt, parseBrewSteps, countdownDisplay, BrewStep } from "@/lib/teaBrewing";
 import { playBeep } from "@/lib/playBeep";
 import { ChatApiMessage, UiMessage } from "@/lib/types";
@@ -19,9 +19,33 @@ const QUICK_PROMPTS = [
 
 export default function TeaCompanion() {
   // ── Tea selection ──────────────────────────────────────────────────────
-  const [teaSelectValue, setTeaSelectValue] = useState("");
+  // teaQuery is the catalogue combobox's own text — a search string while
+  // open, the chosen option's label once committed. It replaces a 58-item
+  // flat <select> that forced either scrolling a wall of options or
+  // truncating illegibly at mobile widths.
+  const [teaQuery, setTeaQuery] = useState("");
+  const [comboOpen, setComboOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const comboRootRef = useRef<HTMLDivElement>(null);
   const [teaInputValue, setTeaInputValue] = useState("");
   const [currentTea, setCurrentTeaState] = useState("");
+  // A tea change that would end an in-progress brew waits here for the
+  // drinker to confirm, instead of discarding their steep silently.
+  const [pendingTeaChange, setPendingTeaChange] = useState<{
+    name: string;
+    source: "combobox" | "input";
+  } | null>(null);
+  const confirmKeepBtnRef = useRef<HTMLButtonElement>(null);
+
+  // A keyboard user who just committed a tea change (Enter) has their focus
+  // sitting on a field that's about to blur, with nowhere else to land —
+  // move it onto the confirmation's safe default action instead of
+  // dropping it. "Keep brewing" (not "Switch tea") gets the focus because
+  // it's the non-destructive choice; Enter here should preserve the brew,
+  // not require an extra Tab past it.
+  useEffect(() => {
+    if (pendingTeaChange) confirmKeepBtnRef.current?.focus();
+  }, [pendingTeaChange]);
 
   // ── Chat ───────────────────────────────────────────────────────────────
   const [messages, setMessages] = useState<UiMessage[]>([]);
@@ -57,29 +81,155 @@ export default function TeaCompanion() {
   }
 
   // ── Tea selection ──────────────────────────────────────────────────────
-  function setCurrentTea(name: string) {
+  // A brew is "in progress" once its timer has actually run (started,
+  // paused, or just finished counting down — `finished` recurs on every
+  // timed step, not only the last one, so it still means "mid-session")
+  // or the drinker has stepped past the first step. Reaching the final
+  // step (the untimed "pour & enjoy") means the ritual is already
+  // complete, so nothing is left to protect there. That's the line
+  // between what's worth an accidental-tea-switch warning and what isn't.
+  const isOnFinalBrewStep = brewSteps.length > 0 && currentStep === brewSteps.length - 1;
+  const hasActiveBrewProgress =
+    brewSteps.length > 0 &&
+    !isOnFinalBrewStep &&
+    (started || paused || finished || currentStep > 0);
+
+  function commitTeaChange(name: string) {
     if (name !== currentTea) resetBrew();
     setCurrentTeaState(name);
+    setPendingTeaChange(null);
   }
 
-  function onTeaSelectChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const val = e.target.value;
-    setTeaSelectValue(val);
-    if (val) {
-      setTeaInputValue("");
-      setCurrentTea(val);
+  function requestTeaChange(name: string, source: "combobox" | "input") {
+    if (name === currentTea) return;
+    if (hasActiveBrewProgress) {
+      setPendingTeaChange({ name, source });
+    } else {
+      commitTeaChange(name);
     }
   }
 
+  function confirmTeaChange() {
+    if (pendingTeaChange) commitTeaChange(pendingTeaChange.name);
+  }
+
+  function cancelTeaChange() {
+    if (!pendingTeaChange) return;
+    // Roll back only the field that proposed the change — currentTea (and
+    // the badge showing it) never moved, so there's nothing else to restore.
+    if (pendingTeaChange.source === "combobox") setTeaQuery("");
+    else setTeaInputValue("");
+    setPendingTeaChange(null);
+  }
+
+  // ── Tea catalogue combobox ──────────────────────────────────────────────
+  // Search-to-filter over the same 58 teas a flat <select> used to dump in
+  // one unscannable list — type a few letters to narrow it, or arrow/Enter
+  // through the full list when browsing. Every row renders its full label,
+  // so nothing truncates the way the native control did on mobile.
+  const catalogueOptions = useMemo(() => TEA_OPTIONS.filter((o) => o.value), []);
+  const filteredTeaOptions = useMemo(() => {
+    const q = teaQuery.trim().toLowerCase();
+    if (!q) return catalogueOptions;
+    return catalogueOptions.filter((o) => o.label.toLowerCase().includes(q));
+  }, [catalogueOptions, teaQuery]);
+
+  function openCombo() {
+    setComboOpen(true);
+    setActiveIndex(filteredTeaOptions.length > 0 ? 0 : -1);
+  }
+
+  function selectComboOption(opt: TeaOption) {
+    setTeaQuery(opt.label);
+    setComboOpen(false);
+    setActiveIndex(-1);
+    setTeaInputValue("");
+    requestTeaChange(opt.value, "combobox");
+  }
+
+  function onComboChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setTeaQuery(e.target.value);
+    setComboOpen(true);
+    setActiveIndex(0);
+  }
+
+  function onComboKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (!comboOpen) return openCombo();
+      setActiveIndex((i) => Math.min(i + 1, filteredTeaOptions.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!comboOpen) return openCombo();
+      setActiveIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (comboOpen && activeIndex >= 0 && filteredTeaOptions[activeIndex]) {
+        selectComboOption(filteredTeaOptions[activeIndex]);
+      }
+    } else if (e.key === "Escape") {
+      if (comboOpen) {
+        e.stopPropagation(); // let this Escape close the list, not also cancel a pending switch
+        setComboOpen(false);
+      }
+    }
+  }
+
+  // Click (or tab) outside the combobox closes its list without selecting.
+  useEffect(() => {
+    if (!comboOpen) return;
+    function onPointerDown(e: MouseEvent) {
+      if (comboRootRef.current && !comboRootRef.current.contains(e.target as Node)) {
+        setComboOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [comboOpen]);
+
+  // Keep the keyboard-highlighted option scrolled into view as arrow keys
+  // move past the edge of the visible list.
+  useEffect(() => {
+    if (!comboOpen || activeIndex < 0) return;
+    document
+      .getElementById(`tea-option-${activeIndex}`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [comboOpen, activeIndex]);
+
+  // The free-text field only stages a value as the drinker types; it
+  // commits (and can trip the confirmation above) on blur or Enter, not on
+  // every keystroke — a single stray character used to be enough to reset
+  // an active timed brew with no warning at all.
   function onTeaInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const val = e.target.value;
-    setTeaInputValue(val);
-    const trimmed = val.trim();
-    if (trimmed) {
-      setTeaSelectValue("");
-      setCurrentTea(trimmed);
+    setTeaInputValue(e.target.value);
+  }
+
+  function commitTeaInput() {
+    const trimmed = teaInputValue.trim();
+    if (!trimmed) return;
+    setTeaQuery("");
+    requestTeaChange(trimmed, "input");
+  }
+
+  function onTeaInputKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commitTeaInput();
+      e.currentTarget.blur();
     }
   }
+
+  // Escape backs out of a pending tea-switch confirmation from anywhere —
+  // the combobox, the text field, or the confirmation bar's own buttons.
+  useEffect(() => {
+    if (!pendingTeaChange) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") cancelTeaChange();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingTeaChange]);
 
   // ── Sending messages ──────────────────────────────────────────────────
   async function sendMessage(overrideText?: string) {
@@ -248,26 +398,94 @@ export default function TeaCompanion() {
 
       {/* Tea Selector */}
       <div className="tea-selector">
-        <label>Your tea</label>
-        <select id="teaSelect" value={teaSelectValue} onChange={onTeaSelectChange}>
-          {TEA_OPTIONS.map((opt) => (
-            <option key={opt.value || "placeholder"} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+        <label id="teaSelectorLabel">Your tea</label>
+        <div className="tea-combobox" ref={comboRootRef}>
+          <input
+            type="text"
+            id="teaSelect"
+            role="combobox"
+            aria-expanded={comboOpen}
+            aria-controls="teaOptionList"
+            aria-autocomplete="list"
+            aria-activedescendant={activeIndex >= 0 ? `tea-option-${activeIndex}` : undefined}
+            aria-labelledby="teaSelectorLabel"
+            placeholder="Search the catalogue…"
+            autoComplete="off"
+            value={teaQuery}
+            onFocus={(e) => {
+              e.currentTarget.select();
+              openCombo();
+            }}
+            onChange={onComboChange}
+            onKeyDown={onComboKeyDown}
+          />
+          {comboOpen && (
+            <ul className="tea-combobox-list" id="teaOptionList" role="listbox">
+              {filteredTeaOptions.length === 0 ? (
+                <li className="tea-combobox-empty" role="presentation">
+                  No catalogue matches — try the name field instead.
+                </li>
+              ) : (
+                filteredTeaOptions.map((opt, i) => (
+                  <li
+                    key={opt.value}
+                    id={`tea-option-${i}`}
+                    role="option"
+                    aria-selected={i === activeIndex}
+                    className={`tea-combobox-option${i === activeIndex ? " active" : ""}`}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onMouseEnter={() => setActiveIndex(i)}
+                    onClick={() => selectComboOption(opt)}
+                  >
+                    {opt.label}
+                  </li>
+                ))
+              )}
+            </ul>
+          )}
+        </div>
         <span className="or-divider">or</span>
         <input
           type="text"
           id="teaInput"
+          aria-labelledby="teaSelectorLabel"
           placeholder="type tea name…"
           value={teaInputValue}
           onChange={onTeaInputChange}
+          onBlur={commitTeaInput}
+          onKeyDown={onTeaInputKeyDown}
         />
         <span className={`current-tea-badge${currentTea ? " visible" : ""}`} id="teaBadge">
           {currentTea || "—"}
         </span>
       </div>
+
+      {/* Tea-switch confirmation — only surfaces while a brew is actually
+          in progress; an idle or just-loaded session switches instantly. */}
+      {pendingTeaChange && (
+        // role="alert" (not "alertdialog" — this never traps focus or blocks
+        // the rest of the page, so it shouldn't claim modal-dialog semantics)
+        // gets it announced the moment it appears; the effect above still
+        // moves real keyboard focus onto it since an alert alone doesn't.
+        <div className="tea-switch-confirm" role="alert">
+          <span className="tea-switch-confirm-text">
+            Switch to <strong>{pendingTeaChange.name}</strong>? Your {currentTea} brew is still
+            going — this will end it.
+          </span>
+          <div className="tea-switch-confirm-actions">
+            <button
+              ref={confirmKeepBtnRef}
+              className="tea-switch-btn tea-switch-keep"
+              onClick={cancelTeaChange}
+            >
+              Keep brewing {currentTea}
+            </button>
+            <button className="tea-switch-btn tea-switch-confirm-btn" onClick={confirmTeaChange}>
+              Switch tea
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Quick Prompts */}
       <div className="quick-prompts">

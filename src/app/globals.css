@@ -14,6 +14,14 @@
   --paper-dark: #ede3d5;
   --gold: #b5892a;
   --gold-light: #d4a94a;
+  /* --gold on --paper/--cream reads at 2.8:1 — fine for borders, dots, and
+     fills with no text on them, but two grades of the same hue are needed
+     wherever gold actually carries readable text (WCAG AA, 4.5:1):
+     --gold-text for gold text on a light surface, --gold-deep for white
+     text set on a solid gold fill. --gold and --gold-light stay exactly
+     as they were everywhere decorative. */
+  --gold-text: #8a6320;
+  --gold-deep: #93701f;
   --cream: #faf6f0;
   --steam: rgba(181, 137, 42, 0.12);
   --border: rgba(181, 137, 42, 0.25);
@@ -70,7 +78,7 @@ body::before {
   font-family: 'Noto Serif SC', serif;
   font-size: 13px;
   letter-spacing: 0.35em;
-  color: var(--gold);
+  color: var(--gold-text);
   text-transform: uppercase;
   margin-bottom: 4px;
   opacity: 0.85;
@@ -87,7 +95,12 @@ body::before {
   font-size: 12px;
   letter-spacing: 0.2em;
   color: var(--ink-muted);
-  text-transform: uppercase;
+  /* Small caps, not a solid block of capitals — 32 characters of full
+     uppercase loses the word-shape cues that make text scannable at a
+     glance. This keeps the tracked, boutique-kicker feel while staying
+     legible; the source copy is already title case, so true capitals
+     (B, M, H) render full-size and the rest as small caps. */
+  font-variant: small-caps;
   margin-top: 4px;
 }
 
@@ -108,7 +121,6 @@ body::before {
   white-space: nowrap;
   flex-shrink: 0;
 }
-.tea-selector select,
 .tea-selector input {
   flex: 1;
   background: var(--cream);
@@ -121,8 +133,8 @@ body::before {
   outline: none;
   transition: border-color 0.2s var(--ease-calm);
   min-width: 0;
+  width: 100%;
 }
-.tea-selector select:focus,
 .tea-selector input:focus {
   border-color: var(--gold);
 }
@@ -132,9 +144,59 @@ body::before {
   letter-spacing: 0.1em;
   flex-shrink: 0;
 }
+
+/* ── Tea catalogue combobox ──
+   Replaces a flat 58-item <select> — type to filter, or arrow/Enter
+   through the full list. Every option renders its full label, so nothing
+   truncates the way the native control did at mobile widths. */
+.tea-combobox {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.tea-combobox-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--cream);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgba(26, 18, 11, 0.16);
+  list-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.tea-combobox-option {
+  padding: 11px 12px;
+  font-size: 15px;
+  color: var(--ink);
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  min-height: 44px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+}
+.tea-combobox-option:last-child {
+  border-bottom: none;
+}
+.tea-combobox-option.active {
+  background: var(--steam);
+  color: var(--gold-text);
+}
+.tea-combobox-empty {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--ink-muted);
+  font-style: italic;
+}
 .current-tea-badge {
   display: none;
-  background: var(--gold);
+  background: var(--gold-deep);
   color: white;
   font-size: 11px;
   letter-spacing: 0.1em;
@@ -146,6 +208,79 @@ body::before {
 }
 .current-tea-badge.visible {
   display: block;
+}
+
+/* ── Tea-switch confirmation ──
+   Surfaces only when picking a different tea would end a brew already in
+   progress. Sits inline, not as a modal — it interrupts a decision, not
+   the whole screen, and the timer underneath keeps running while it waits. */
+.tea-switch-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 11px 14px;
+  margin: 10px 0 0;
+  background: var(--steam);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  flex-shrink: 0;
+  animation: settleIn 0.3s var(--ease-calm) both;
+}
+@keyframes settleIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.tea-switch-confirm-text {
+  font-size: 14px;
+  color: var(--ink-faint);
+  flex: 1 1 220px;
+}
+.tea-switch-confirm-text strong {
+  color: var(--gold-text);
+  font-weight: 600;
+}
+.tea-switch-confirm-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.tea-switch-btn {
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  min-height: 44px;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s var(--ease-calm);
+  white-space: nowrap;
+}
+.tea-switch-keep {
+  background: var(--gold-deep);
+  border: 1px solid var(--gold-deep);
+  color: white;
+}
+/* Hover leans on elevation, not a lighter fill — lightening this
+   background is exactly what would undo its white-text contrast. */
+.tea-switch-keep:hover {
+  box-shadow: 0 4px 12px rgba(26, 18, 11, 0.2);
+  transform: translateY(-1px);
+}
+.tea-switch-confirm-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--ink-muted);
+}
+.tea-switch-confirm-btn:hover {
+  border-color: var(--ink-muted);
+  color: var(--ink);
 }
 
 /* ── Quick prompts ── */
@@ -175,7 +310,7 @@ body::before {
 .qp-btn:hover {
   background: var(--steam);
   border-color: var(--gold);
-  color: var(--gold);
+  color: var(--gold-text);
 }
 
 /* ── Chat area ── */
@@ -263,7 +398,7 @@ body::before {
   border-top-right-radius: 2px;
 }
 .msg-bubble strong {
-  color: var(--gold);
+  color: var(--gold-text);
   font-weight: 600;
 }
 .msg-bubble em {
@@ -491,8 +626,25 @@ body::before {
   opacity: 0.6;
 }
 @media (max-width: 600px) {
+  /* A horizontal row has no room left for a full tea name once the
+     catalogue search, the "or", the free-text field, and the badge all
+     fight for one line — it used to truncate to a couple of illegible
+     characters. Stack them instead: each control gets the full width it
+     needs to stay readable. */
   .tea-selector {
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .tea-selector label {
+    white-space: normal;
+  }
+  .tea-selector .or-divider {
+    align-self: center;
+    margin: -3px 0;
+  }
+  .current-tea-badge {
+    align-self: flex-start;
   }
   .quick-prompts {
     gap: 5px;
@@ -512,7 +664,7 @@ body::before {
   flex-shrink: 0;
 }
 .brew-now-btn {
-  background: var(--gold);
+  background: var(--gold-deep);
   border: none;
   border-radius: var(--radius);
   padding: 11px 36px;
@@ -522,14 +674,16 @@ body::before {
   color: white;
   cursor: pointer;
   transition:
-    background 0.2s var(--ease-calm),
+    box-shadow 0.2s var(--ease-calm),
     transform 0.2s var(--ease-calm);
   display: flex;
   align-items: center;
   gap: 8px;
 }
+/* Hover leans on elevation, not a lighter fill — lightening this
+   background is exactly what would undo its white-text contrast. */
 .brew-now-btn:hover {
-  background: var(--gold-light);
+  box-shadow: 0 6px 18px rgba(26, 18, 11, 0.22);
   transform: translateY(-1px);
 }
 .brew-now-btn:active {
@@ -538,9 +692,9 @@ body::before {
 
 /* "Ready for next step" state on the Skip button after timer ends */
 .brew-nav-btn.brew-ready-next {
-  background: var(--gold);
+  background: var(--gold-deep);
   color: white;
-  border-color: var(--gold);
+  border-color: var(--gold-deep);
   font-weight: 600;
   letter-spacing: 0.04em;
   animation: pulse-gold var(--breath) ease-in-out infinite;
@@ -553,11 +707,6 @@ body::before {
   50% {
     box-shadow: 0 0 0 6px rgba(180, 140, 80, 0);
   }
-}
-
-/* "Start timer" state on main button */
-.brew-modal-main-btn.start-ready {
-  background: var(--gold);
 }
 
 /* ── Brew Modal Overlay ── */
@@ -676,9 +825,8 @@ body::before {
   font-size: 11px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: var(--gold);
+  color: var(--gold-text);
   margin-bottom: 6px;
-  opacity: 0.9;
 }
 .brew-modal-time {
   font-family: 'IM Fell English', serif;
@@ -692,7 +840,7 @@ body::before {
 /* A slow, deliberate breath rather than a flicker — the last seconds of a
    steep are a moment to settle into, not a countdown alarm. */
 .brew-modal-time.urgent {
-  color: var(--gold);
+  color: var(--gold-text);
   animation: breathe var(--breath) ease-in-out infinite;
 }
 @keyframes breathe {
@@ -729,7 +877,7 @@ body::before {
   font-family: 'IM Fell English', serif;
   font-size: 16px;
   font-style: italic;
-  color: var(--gold);
+  color: var(--gold-text);
   text-align: center;
   margin-top: 8px;
   display: none;
@@ -743,7 +891,7 @@ body::before {
   margin: 14px 20px 0;
   padding: 14px;
   width: calc(100% - 40px);
-  background: var(--gold);
+  background: var(--gold-deep);
   border: none;
   border-radius: var(--radius);
   font-family: 'Cormorant Garamond', serif;
@@ -751,11 +899,13 @@ body::before {
   letter-spacing: 0.06em;
   color: white;
   cursor: pointer;
-  transition: background 0.2s var(--ease-calm);
+  transition: box-shadow 0.2s var(--ease-calm);
   flex-shrink: 0;
 }
+/* Hover leans on a shadow, not a lighter fill — lightening this
+   background is exactly what would undo its white-text contrast. */
 .brew-modal-main-btn:hover {
-  background: var(--gold-light);
+  box-shadow: 0 4px 14px rgba(26, 18, 11, 0.2);
 }
 .brew-modal-main-btn.paused {
   background: var(--ink-faint);
@@ -787,7 +937,7 @@ body::before {
 .brew-nav-btn:hover {
   background: var(--steam);
   border-color: var(--gold);
-  color: var(--gold);
+  color: var(--gold-text);
 }
 .brew-nav-btn:disabled {
   opacity: 0.3;
@@ -813,7 +963,7 @@ body::before {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 11px 20px;
+  padding: 13px 20px;
   border-bottom: 1px solid rgba(181, 137, 42, 0.1);
   cursor: pointer;
   transition: background 0.15s var(--ease-calm);
@@ -848,8 +998,8 @@ body::before {
   transition: all 0.2s var(--ease-calm);
 }
 .brew-step.active .brew-step-num {
-  background: var(--gold);
-  border-color: var(--gold);
+  background: var(--gold-deep);
+  border-color: var(--gold-deep);
   color: white;
 }
 .brew-step.done .brew-step-num {
@@ -861,19 +1011,20 @@ body::before {
   min-width: 0;
 }
 .brew-step-label {
-  font-size: 14px;
+  font-size: 16px;
   color: var(--ink);
   line-height: 1.4;
 }
 .brew-step-sub {
-  font-size: 11px;
+  font-size: 14px;
   color: var(--ink-muted);
-  margin-top: 2px;
-  letter-spacing: 0.03em;
+  margin-top: 4px;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
 }
 .brew-step-dur {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-muted);
   letter-spacing: 0.05em;
 }
@@ -941,7 +1092,7 @@ body::before {
   line-height: 1;
 }
 .brew-mini-step {
-  font-size: 10px;
+  font-size: 12px;
   opacity: 0.7;
   letter-spacing: 0.08em;
 }

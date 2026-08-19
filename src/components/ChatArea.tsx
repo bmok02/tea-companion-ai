@@ -11,10 +11,25 @@ interface ChatAreaProps {
 
 export default function ChatArea({ messages, isLoading }: ChatAreaProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const lastMessageId = messages[messages.length - 1]?.id;
+
+  // Scroll to the top of the newest message instead of the bottom of the
+  // chat, so a long reply starts in view rather than requiring a scroll-up.
+  useEffect(() => {
+    if (lastMessageId) {
+      messageRefs.current
+        .get(lastMessageId)
+        ?.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastMessageId]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [messages, isLoading]);
+    if (isLoading) {
+      bottomRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [isLoading]);
 
   return (
     <div
@@ -42,7 +57,14 @@ export default function ChatArea({ messages, isLoading }: ChatAreaProps) {
       )}
 
       {messages.map((m) => (
-        <div className={`msg ${m.role}`} key={m.id}>
+        <div
+          className={`msg ${m.role}`}
+          key={m.id}
+          ref={(el) => {
+            if (el) messageRefs.current.set(m.id, el);
+            else messageRefs.current.delete(m.id);
+          }}
+        >
           <div className="msg-avatar">{m.role === "assistant" ? "茶" : "人"}</div>
           <div
             className="msg-bubble"
