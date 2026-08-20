@@ -283,15 +283,10 @@ body::before {
   color: var(--ink);
 }
 
-/* ── Quick prompts ── */
-.quick-prompts {
-  display: flex;
-  gap: 7px;
-  padding: 9px 0;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-  flex-wrap: wrap;
-}
+/* ── Quick prompts ──
+   Reused inside the brew modal's "while you steep" row (see
+   .brew-modal-steep-prompts below) — this is the only place they render
+   now that the top-level row moved there. */
 .qp-btn {
   display: inline-flex;
   align-items: center;
@@ -311,6 +306,119 @@ body::before {
   background: var(--steam);
   border-color: var(--gold);
   color: var(--gold-text);
+}
+
+/* ── Flavour profile ──
+   Collapsed by default (see TeaCompanion.tsx's profileOpen) so it never
+   costs chat space unless the drinker opens it — only rendered at all for
+   catalogue entries with enough structured data to chart. */
+.tea-profile-row {
+  flex-shrink: 0;
+  padding: 8px 0 0;
+}
+.tea-profile-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  padding: 2px 0;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+  cursor: pointer;
+  transition: color 0.2s var(--ease-calm);
+}
+.tea-profile-toggle:hover {
+  color: var(--gold-text);
+}
+.tea-profile-toggle-caret {
+  font-size: 9px;
+  opacity: 0.7;
+}
+.tea-profile-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 20px;
+  padding: 10px 4px 4px;
+  animation: settleIn 0.3s var(--ease-calm) both;
+}
+.tea-profile-chart {
+  flex-shrink: 0;
+}
+.tea-profile-ring {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.tea-profile-spoke {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.tea-profile-fill {
+  fill-opacity: 0.28;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  transition: all 0.4s var(--ease-calm);
+}
+.tea-profile-label {
+  font-size: 9px;
+  fill: var(--ink-muted);
+  font-family: 'Cormorant Garamond', serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.tea-profile-notes {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.tea-profile-notes p {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-faint);
+  margin-bottom: 6px;
+}
+.tea-profile-notes p:last-child {
+  margin-bottom: 0;
+}
+.tea-profile-notes strong {
+  color: var(--gold-text);
+  font-weight: 600;
+}
+
+/* On a wide viewport there's already dead margin either side of the
+   centred chat column — the panel docks into that left margin as a fixed
+   sidebar instead of pushing the chat area down. Below this breakpoint
+   there isn't room for it, so it stays the inline block above (the
+   default rule set). Kept separate from (and lower than) the brew dock's
+   breakpoint below — this panel is narrower, so it fits comfortably at
+   widths the wider brew dock still can't. */
+@media (min-width: 1200px) {
+  .tea-profile-panel {
+    position: fixed;
+    top: 120px;
+    left: calc(50% - (var(--chat-w) / 2) - 24px - 224px);
+    width: 224px;
+    max-height: calc(100vh - 150px);
+    overflow-y: auto;
+    flex-direction: column;
+    align-items: flex-start;
+    flex-wrap: nowrap;
+    background: var(--cream);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 12px 32px rgba(26, 18, 11, 0.14);
+    animation: slideIn 0.3s var(--ease-calm) both;
+  }
+  .tea-profile-chart {
+    margin: 0 auto;
+  }
+  .tea-profile-notes {
+    flex: none;
+  }
 }
 
 /* ── Chat area ── */
@@ -646,7 +754,7 @@ body::before {
   .current-tea-badge {
     align-self: flex-start;
   }
-  .quick-prompts {
+  .brew-modal-steep-prompts-row {
     gap: 5px;
   }
   .qp-btn {
@@ -663,6 +771,12 @@ body::before {
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
+.brew-now-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
 .brew-now-btn {
   background: var(--gold-deep);
   border: none;
@@ -675,7 +789,8 @@ body::before {
   cursor: pointer;
   transition:
     box-shadow 0.2s var(--ease-calm),
-    transform 0.2s var(--ease-calm);
+    transform 0.2s var(--ease-calm),
+    opacity 0.2s var(--ease-calm);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -688,6 +803,21 @@ body::before {
 }
 .brew-now-btn:active {
   transform: scale(0.97);
+}
+/* No tea picked yet — greyed out and inert rather than clickable-but-
+   surprising, with .brew-now-hint spelling out why right underneath. */
+.brew-now-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+.brew-now-hint {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--ink-muted);
+  letter-spacing: 0.02em;
+  animation: settleIn 0.3s var(--ease-calm) both;
 }
 
 /* "Ready for next step" state on the Skip button after timer ends */
@@ -764,6 +894,30 @@ body::before {
     transform 0.38s var(--ease-calm);
 }
 
+/* On a wide viewport, dock the brew session into the dead margin on the
+   right — mirroring the flavour profile's left dock — instead of a
+   centred overlay that dims and blocks the chat behind it. The overlay
+   itself goes fully transparent and click-through; only the modal card
+   (now escaped into its own fixed position, same trick as the flavour
+   panel) stays interactive. Below this breakpoint it's untouched: the
+   original centred, backdrop-dimmed dialog. */
+@media (min-width: 1400px) {
+  .brew-overlay {
+    background: transparent;
+    backdrop-filter: none;
+    pointer-events: none;
+  }
+  .brew-modal {
+    position: fixed;
+    top: 110px;
+    right: calc(50% - (var(--chat-w) / 2) - 28px - 300px);
+    width: 300px;
+    max-width: 300px;
+    max-height: calc(100vh - 140px);
+    pointer-events: auto;
+  }
+}
+
 .brew-modal-header {
   display: flex;
   align-items: center;
@@ -822,15 +976,21 @@ body::before {
   }
 }
 .brew-modal-step-label {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--gold-text);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+}
+.brew-modal-time-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
 }
 .brew-modal-time {
   font-family: 'IM Fell English', serif;
-  font-size: 68px;
+  font-size: 80px;
   font-weight: 400;
   color: var(--ink);
   line-height: 1;
@@ -873,6 +1033,60 @@ body::before {
   transform: scaleX(0);
   transition: transform 1s linear;
 }
+/* Steeping cup — the liquid rises and its rim brightens as the step's
+   elapsed share grows, colour keyed to the tea's category (see
+   src/lib/teaVisuals.ts). Turns the countdown's dead time into something
+   worth watching instead of a bare number. */
+.brew-cup {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+}
+.brew-cup-liquid {
+  transition:
+    y 1s linear,
+    height 1s linear;
+}
+.brew-cup.urgent svg {
+  animation: breathe var(--breath) ease-in-out infinite;
+}
+.brew-cup-steam {
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 26px;
+  pointer-events: none;
+}
+.brew-cup-wisp {
+  position: absolute;
+  bottom: 0;
+  width: 8px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ink-muted);
+  filter: blur(3.5px);
+  opacity: 0;
+  animation: steam-rise 4.4s ease-out infinite;
+}
+.brew-cup-wisp-1 {
+  left: 8px;
+  animation-delay: 0s;
+}
+.brew-cup-wisp-2 {
+  left: 18px;
+  width: 7px;
+  height: 12px;
+  animation-delay: 1.4s;
+}
+.brew-cup-wisp-3 {
+  left: 27px;
+  width: 7.5px;
+  height: 13px;
+  animation-delay: 2.8s;
+}
+
 .brew-modal-done-msg {
   font-family: 'IM Fell English', serif;
   font-size: 16px;
@@ -912,6 +1126,27 @@ body::before {
 }
 .brew-modal-main-btn.paused:hover {
   background: var(--ink);
+}
+
+/* "While you steep" prompts — only rendered during an actual countdown
+   (see BrewModal.tsx's `isTimed` gate), the real dead time in a brew
+   session. Reuses .qp-btn's pill styling from the old top-level row. */
+.brew-modal-steep-prompts {
+  padding: 2px 20px 14px;
+  flex-shrink: 0;
+}
+.brew-modal-steep-prompts-label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  margin-bottom: 8px;
+}
+.brew-modal-steep-prompts-row {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
 }
 
 /* Prev / Next row */
@@ -1029,31 +1264,44 @@ body::before {
   letter-spacing: 0.05em;
 }
 
-/* ── Floating mini-timer (shows when modal is closed but timer running) ── */
+/* ── Floating mini-timer (shows when modal is closed but timer running) ──
+   A condensed version of the modal's own countdown — same BrewCup, just
+   smaller — rather than a plain dot/ring, so the "what's steeping and how
+   much longer" answer is visible at a glance without reopening the modal. */
 .brew-mini {
   display: none;
   position: fixed;
-  bottom: 80px;
-  right: 16px;
+  /* Clear of the input row's send button (which sits at the very bottom
+     of the viewport) — well above its resting height, with headroom for
+     the textarea growing to a couple of lines. */
+  bottom: 110px;
+  right: 20px;
   background: var(--ink-faint);
-  color: white;
-  border-radius: 28px;
-  padding: 8px 16px 8px 12px;
+  color: var(--paper);
+  /* Scoped so the cup's outline/steam (styled via var(--ink-muted) for the
+     modal's cream background) stay legible against this dark brown card
+     instead of the low-contrast muted-brown-on-brown they'd otherwise get. */
+  --ink-muted: rgba(255, 255, 255, 0.55);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 22px 14px 14px;
   font-family: 'Cormorant Garamond', serif;
-  font-size: 14px;
   cursor: pointer;
   z-index: 400;
-  gap: 8px;
+  gap: 14px;
   align-items: center;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-  transition: transform 0.2s var(--ease-calm);
+  box-shadow: 0 12px 32px rgba(26, 18, 11, 0.28);
+  transition:
+    transform 0.2s var(--ease-calm),
+    box-shadow 0.2s var(--ease-calm);
   animation: slideIn 0.35s var(--ease-calm) both;
 }
 .brew-mini.visible {
   display: flex;
 }
 .brew-mini:hover {
-  transform: scale(1.04);
+  transform: scale(1.03);
+  box-shadow: 0 16px 40px rgba(26, 18, 11, 0.26);
 }
 @keyframes slideIn {
   from {
@@ -1065,40 +1313,42 @@ body::before {
     transform: translateY(0);
   }
 }
-/* Same breath cadence as the countdown and the ready-glow — the whole app
-   keeps one unhurried heartbeat instead of several unrelated blinks. */
-.brew-mini-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--gold);
-  animation: breathe-soft var(--breath) ease-in-out infinite;
-  flex-shrink: 0;
+/* Scaled down from the modal's default 88×82 — same component, same
+   liquor-colour fill and steam, just sized to fit a floating card. */
+.brew-mini .brew-cup svg {
+  width: 60px;
+  height: 56px;
 }
-.brew-mini-dot.paused {
-  animation: none;
-  opacity: 0.4;
+.brew-mini .brew-cup-steam {
+  width: 28px;
+  height: 18px;
 }
-@keyframes breathe-soft {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
+.brew-mini .brew-cup-wisp {
+  width: 6px;
+  height: 10px;
 }
 .brew-mini-text {
   line-height: 1;
 }
 .brew-mini-step {
-  font-size: 12px;
-  opacity: 0.7;
+  font-size: 13px;
+  color: var(--ink-muted);
   letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
 }
 .brew-mini-time {
-  font-size: 16px;
-  letter-spacing: 0.05em;
+  font-family: 'IM Fell English', serif;
+  font-size: 30px;
+  letter-spacing: 0.02em;
+  transition: color 0.3s var(--ease-calm);
+}
+.brew-mini-time.urgent {
+  /* gold-text is calibrated for the modal's light cream background —
+     gold-light instead, for the same reason --ink-muted is overridden
+     above: this card's background is dark. */
+  color: var(--gold-light);
+  animation: breathe var(--breath) ease-in-out infinite;
 }
 
 /* ── Reduced motion ──
@@ -1116,14 +1366,17 @@ body::before {
     animation-iteration-count: 1 !important;
   }
   .brew-modal-time.urgent,
+  .brew-mini-time.urgent,
   .brew-nav-btn.brew-ready-next,
-  .brew-mini-dot,
   .typing-dots span,
   .welcome-glyph,
-  .steam-wisp {
+  .steam-wisp,
+  .brew-cup.urgent svg,
+  .brew-cup-wisp {
     animation: none !important;
   }
-  .steam-wisp {
+  .steam-wisp,
+  .brew-cup-steam {
     display: none;
   }
 }

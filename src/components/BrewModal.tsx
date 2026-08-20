@@ -1,6 +1,14 @@
 "use client";
 
-import { BrewStep, countdownDisplay, formatBrewTime } from "@/lib/teaBrewing";
+import { BrewStep, countdownDisplay, fillPercent, formatBrewTime } from "@/lib/teaBrewing";
+import { LiquorTheme } from "@/lib/teaVisuals";
+import BrewCup from "./BrewCup";
+
+interface SteepPrompt {
+  icon: string;
+  label: string;
+  text: string;
+}
 
 interface BrewModalProps {
   open: boolean;
@@ -12,12 +20,15 @@ interface BrewModalProps {
   started: boolean;
   paused: boolean;
   finished: boolean;
+  liquorTheme: LiquorTheme;
   onClose: () => void;
   onStart: () => void;
   onPauseResume: () => void;
   onNext: () => void;
   onPrev: () => void;
   onJumpToStep: (i: number) => void;
+  steepPrompts: SteepPrompt[];
+  onSteepPrompt: (text: string) => void;
 }
 
 export default function BrewModal({
@@ -30,12 +41,15 @@ export default function BrewModal({
   started,
   paused,
   finished,
+  liquorTheme,
   onClose,
   onStart,
   onPauseResume,
   onNext,
   onPrev,
   onJumpToStep,
+  steepPrompts,
+  onSteepPrompt,
 }: BrewModalProps) {
   const step = currentStep >= 0 ? steps[currentStep] : undefined;
   const isTimed = !!step && step.seconds > 0;
@@ -55,7 +69,7 @@ export default function BrewModal({
       stepLabel = step.label.toUpperCase();
       timeLabel = countdownDisplay(secondsLeft);
       urgent = started && secondsLeft <= 10;
-      fillPct = totalSeconds > 0 ? ((totalSeconds - secondsLeft) / totalSeconds) * 100 : 0;
+      fillPct = fillPercent(secondsLeft, totalSeconds);
     } else if (isLastStep) {
       countdownVisible = true;
       stepLabel = "✦";
@@ -118,11 +132,21 @@ export default function BrewModal({
           <div className="brew-modal-step-label" id="brewModalStepLabel">
             {stepLabel}
           </div>
-          <div
-            className={`brew-modal-time${urgent ? " urgent" : ""}`}
-            id="brewModalTime"
-          >
-            {timeLabel}
+          <div className="brew-modal-time-row">
+            {isTimed && (
+              <BrewCup
+                fillPct={fillPct}
+                theme={liquorTheme}
+                steaming={started && !paused && !finished}
+                urgent={urgent}
+              />
+            )}
+            <div
+              className={`brew-modal-time${urgent ? " urgent" : ""}`}
+              id="brewModalTime"
+            >
+              {timeLabel}
+            </div>
           </div>
           <div className="brew-modal-progress">
             <div
@@ -147,6 +171,25 @@ export default function BrewModal({
           >
             {mainBtnText}
           </button>
+        )}
+
+        {/* Only while there's an actual countdown running (a rinse or a
+            steep) — that's real dead time, unlike the untimed "measure your
+            leaves" or "pour & enjoy" steps, which are hands-on rather than
+            waiting. Picking one sends it to chat and hands off to the
+            floating mini-timer so the countdown keeps going underneath. */}
+        {isTimed && (
+          <div className="brew-modal-steep-prompts">
+            <span className="brew-modal-steep-prompts-label">While you steep, ask me</span>
+            <div className="brew-modal-steep-prompts-row">
+              {steepPrompts.map((sp) => (
+                <button className="qp-btn" key={sp.text} onClick={() => onSteepPrompt(sp.text)}>
+                  <span aria-hidden="true">{sp.icon}</span>
+                  <span>{sp.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         )}
 
         <div className="brew-modal-nav">

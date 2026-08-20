@@ -182,3 +182,10 @@ export function countdownDisplay(secs: number): string {
     s = secs % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
 }
+
+// Shared by BrewModal's big countdown fill and BrewMini's ring so both read
+// the same progress from the same numbers instead of drifting apart.
+export function fillPercent(secondsLeft: number, totalSeconds: number): number {
+  if (totalSeconds <= 0) return 0;
+  return ((totalSeconds - secondsLeft) / totalSeconds) * 100;
+}

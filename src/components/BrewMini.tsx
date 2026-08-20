@@ -1,10 +1,16 @@
 "use client";
 
+import { LiquorTheme } from "@/lib/teaVisuals";
+import BrewCup from "./BrewCup";
+
 interface BrewMiniProps {
   visible: boolean;
   stepLabel: string;
   timeLabel: string;
-  paused: boolean;
+  fillPct: number; // 0–100, elapsed share of the current step
+  steaming: boolean;
+  urgent: boolean;
+  theme: LiquorTheme;
   onClick: () => void;
 }
 
@@ -12,7 +18,10 @@ export default function BrewMini({
   visible,
   stepLabel,
   timeLabel,
-  paused,
+  fillPct,
+  steaming,
+  urgent,
+  theme,
   onClick,
 }: BrewMiniProps) {
   return (
@@ -21,10 +30,10 @@ export default function BrewMini({
       onClick={onClick}
       title="Return to brew session"
     >
-      <div className={`brew-mini-dot${paused ? " paused" : ""}`} />
+      <BrewCup fillPct={fillPct} theme={theme} steaming={steaming} urgent={urgent} />
       <div className="brew-mini-text">
         <div className="brew-mini-step">{stepLabel}</div>
-        <div className="brew-mini-time">{timeLabel}</div>
+        <div className={`brew-mini-time${urgent ? " urgent" : ""}`}>{timeLabel}</div>
       </div>
     </div>
   );

@@ -5,12 +5,27 @@ import ChatArea from "./ChatArea";
 import BrewModal from "./BrewModal";
 import BrewMini from "./BrewMini";
 import { TEA_OPTIONS, TeaOption } from "@/lib/teaOptions";
-import { findTea, buildSystemPrompt, parseBrewSteps, countdownDisplay, BrewStep } from "@/lib/teaBrewing";
+import {
+  findTea,
+  buildSystemPrompt,
+  parseBrewSteps,
+  countdownDisplay,
+  fillPercent,
+  BrewStep,
+} from "@/lib/teaBrewing";
+import { getLiquorTheme, getFlavorProfile } from "@/lib/teaVisuals";
 import { playBeep } from "@/lib/playBeep";
 import { ChatApiMessage, UiMessage } from "@/lib/types";
+import TeaProfileChart from "./TeaProfileChart";
 
-const QUICK_PROMPTS = [
-  { icon: "🫖", label: "How to brew", text: "How do I brew this tea?" },
+// "How to brew" used to live here too, but it was pure overlap: asking the
+// chat companion for brewing steps just produced a worse copy of the
+// interactive timer that "Begin Brew Session" already opens. These four are
+// the prompts a step timer genuinely can't answer, so they've moved off the
+// top-level screen entirely and now surface inside the brew modal itself —
+// specifically during a step's countdown, where there's real dead time to
+// fill instead of competing with the "start brewing" call to action.
+const STEEP_PROMPTS = [
   { icon: "🧘", label: "Mindful session", text: "Guide me through a mindful tea session" },
   { icon: "📜", label: "History & origins", text: "Tell me the history and origins of this tea" },
   { icon: "✨", label: "Fun fact", text: "Share a fun fact or story about this tea" },
@@ -46,6 +61,25 @@ export default function TeaCompanion() {
   useEffect(() => {
     if (pendingTeaChange) confirmKeepBtnRef.current?.focus();
   }, [pendingTeaChange]);
+
+  // ── Tea visuals ────────────────────────────────────────────────────────
+  // Liquor colour and flavour profile are both derived from the same
+  // catalogue entry the chat companion already looks up — no separate data
+  // source, just new ways of reading what's there.
+  const currentTeaObj = useMemo(() => findTea(currentTea), [currentTea]);
+  const liquorTheme = useMemo(() => getLiquorTheme(currentTeaObj), [currentTeaObj]);
+  const flavorProfile = useMemo(() => getFlavorProfile(currentTeaObj), [currentTeaObj]);
+  const [profileOpen, setProfileOpen] = useState(true);
+  // Re-open the panel on a tea change by adjusting state during render
+  // (React's recommended pattern for this) rather than in an effect, which
+  // would cost an extra render pass just to hide something already open.
+  // This only re-opens a panel the drinker explicitly closed for the last
+  // tea — picking a new one always starts from "open" again.
+  const [profileOpenForTea, setProfileOpenForTea] = useState(currentTea);
+  if (currentTea !== profileOpenForTea) {
+    setProfileOpenForTea(currentTea);
+    setProfileOpen(true);
+  }
 
   // ── Chat ───────────────────────────────────────────────────────────────
   const [messages, setMessages] = useState<UiMessage[]>([]);
@@ -244,6 +278,11 @@ export default function TeaCompanion() {
     historyRef.current = [...historyRef.current, { role: "user", content: userContent }];
 
     setIsLoading(true);
+    // Streamed in as it arrives (see /api/chat) rather than awaited as one
+    // block — assistantId/streamedText live outside React state so the SSE
+    // read loop can accumulate text without waiting on a render each chunk.
+    let assistantId: string | null = null;
+    let streamedText = "";
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -258,15 +297,82 @@ export default function TeaCompanion() {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error?.message || `Error ${res.status}`);
       }
+      if (!res.body) {
+        throw new Error("No response body from server.");
+      }
 
-      const data = await res.json();
-      const replyText = data.content?.[0]?.text || "(No response)";
-      historyRef.current = [...historyRef.current, { role: "assistant", content: replyText }];
-      addAssistantMessage(replyText);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // SSE events are separated by a blank line; keep any trailing
+        // partial event in the buffer for the next chunk.
+        const events = buffer.split("\n\n");
+        buffer = events.pop() ?? "";
+
+        for (const evt of events) {
+          const dataLine = evt
+            .split("\n")
+            .find((line) => line.startsWith("data:"));
+          if (!dataLine) continue;
+
+          let parsed: {
+            type?: string;
+            delta?: { type?: string; text?: string };
+            error?: { message?: string };
+          };
+          try {
+            parsed = JSON.parse(dataLine.slice(5).trim());
+          } catch {
+            continue;
+          }
+
+          if (parsed.type === "error") {
+            throw new Error(parsed.error?.message || "Stream error");
+          }
+          if (parsed.type !== "content_block_delta" || parsed.delta?.type !== "text_delta") {
+            continue;
+          }
+
+          streamedText += parsed.delta.text ?? "";
+          if (!assistantId) {
+            // First token: swap the typing indicator for the real bubble.
+            assistantId = crypto.randomUUID();
+            const id = assistantId;
+            setIsLoading(false);
+            setMessages((prev) => [...prev, { id, role: "assistant", text: streamedText }]);
+          } else {
+            const id = assistantId;
+            const text = streamedText;
+            setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text } : m)));
+          }
+        }
+      }
+
+      if (!assistantId) {
+        addAssistantMessage("(No response)");
+      }
+      historyRef.current = [
+        ...historyRef.current,
+        { role: "assistant", content: streamedText || "(No response)" },
+      ];
     } catch (err) {
-      addAssistantMessage(
-        `Something went wrong: ${err instanceof Error ? err.message : "unknown error"}. Please try again.`
-      );
+      const message = `Something went wrong: ${err instanceof Error ? err.message : "unknown error"}. Please try again.`;
+      if (assistantId) {
+        // A partial reply already streamed in — note the interruption
+        // instead of discarding what the drinker already has.
+        const id = assistantId;
+        setMessages((prev) =>
+          prev.map((m) => (m.id === id ? { ...m, text: `${m.text}\n\n_(connection interrupted)_` } : m))
+        );
+      } else {
+        addAssistantMessage(message);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -274,6 +380,15 @@ export default function TeaCompanion() {
 
   function quickPrompt(text: string) {
     sendMessage(text);
+  }
+
+  // A steep prompt sends into the same chat behind the modal, then closes
+  // the modal so that chat (and the reply streaming in) is actually visible
+  // — the timer itself keeps running underneath, picked up by the floating
+  // mini-timer (BrewMini) the moment the modal closes.
+  function steepPrompt(text: string) {
+    quickPrompt(text);
+    closeBrewModal();
   }
 
   function handleKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -384,8 +499,20 @@ export default function TeaCompanion() {
   const miniActive = currentStep >= 0 && currentStep < brewSteps.length;
   const miniVisible = !modalOpen && miniActive;
   const miniStep = miniActive ? brewSteps[currentStep] : undefined;
+  const miniIsTimed = !!miniStep && miniStep.seconds > 0;
+  const miniIsLastStep = miniActive && currentStep === brewSteps.length - 1;
   const miniStepLabel = miniStep?.label ?? "Steeping";
-  const miniTimeLabel = miniStep && miniStep.seconds > 0 ? countdownDisplay(secondsLeft) : "—";
+  const miniTimeLabel = miniIsTimed ? countdownDisplay(secondsLeft) : "—";
+  // The cup mirrors the modal's: empty before the first pour, rising during
+  // an actual timed step, full and still once poured (the untimed final
+  // step) rather than reset back to empty.
+  const miniFillPct = miniIsTimed
+    ? fillPercent(secondsLeft, totalSeconds)
+    : miniIsLastStep
+      ? 100
+      : 0;
+  const miniSteaming = miniIsTimed && started && !paused && !finished;
+  const miniUrgent = miniIsTimed && started && secondsLeft <= 10;
 
   return (
     <div className="app">
@@ -487,21 +614,62 @@ export default function TeaCompanion() {
         </div>
       )}
 
-      {/* Quick Prompts */}
-      <div className="quick-prompts">
-        {QUICK_PROMPTS.map((qp) => (
-          <button className="qp-btn" key={qp.text} onClick={() => quickPrompt(qp.text)}>
-            <span aria-hidden="true">{qp.icon}</span>
-            <span>{qp.label}</span>
+      {/* Flavour profile — only for catalogue entries with enough structured
+          data (category/aroma/taste) to derive a real reading from; see
+          getFlavorProfile. Collapsed by default so it never costs space
+          from the chat unless the drinker actually wants it. */}
+      {currentTea && flavorProfile && (
+        <div className="tea-profile-row">
+          <button
+            className="tea-profile-toggle"
+            onClick={() => setProfileOpen((o) => !o)}
+            aria-expanded={profileOpen}
+          >
+            <span aria-hidden="true">🌸</span> Flavour profile{" "}
+            <span className="tea-profile-toggle-caret" aria-hidden="true">
+              {profileOpen ? "▲" : "▼"}
+            </span>
           </button>
-        ))}
-      </div>
+          {profileOpen && (
+            <div className="tea-profile-panel">
+              <TeaProfileChart axes={flavorProfile} color={liquorTheme.liquid} />
+              <div className="tea-profile-notes">
+                {currentTeaObj?.aroma && (
+                  <p>
+                    <strong>Aroma</strong> — {currentTeaObj.aroma}
+                  </p>
+                )}
+                {currentTeaObj?.taste && (
+                  <p>
+                    <strong>Taste</strong> — {currentTeaObj.taste}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
-      {/* Brew Now button */}
+      {/* Brew Now button — disabled with a visible instruction until a tea
+          is chosen, instead of only surfacing "please select a tea" as a
+          chat reply after the click (easy to miss, and one more round trip
+          to discover). */}
       <div className="brew-now-row">
-        <button className="brew-now-btn" id="brewNowBtn" onClick={openBrewModal}>
-          <span>🫖</span> Begin Brew Session
-        </button>
+        <div className="brew-now-group">
+          <button
+            className="brew-now-btn"
+            id="brewNowBtn"
+            onClick={openBrewModal}
+            disabled={!currentTea}
+          >
+            <span>🫖</span> Begin Brew Session
+          </button>
+          {!currentTea && (
+            <p className="brew-now-hint">
+              <span aria-hidden="true">☝️</span> Select a tea above to begin
+            </p>
+          )}
+        </div>
       </div>
 
       <BrewModal
@@ -514,19 +682,25 @@ export default function TeaCompanion() {
         started={started}
         paused={paused}
         finished={finished}
+        liquorTheme={liquorTheme}
         onClose={closeBrewModal}
         onStart={startBrewTimer}
         onPauseResume={brewPauseResume}
         onNext={brewNextStep}
         onPrev={brewPrevStep}
         onJumpToStep={(i) => jumpToStep(i)}
+        steepPrompts={STEEP_PROMPTS}
+        onSteepPrompt={steepPrompt}
       />
 
       <BrewMini
         visible={miniVisible}
         stepLabel={miniStepLabel}
         timeLabel={miniTimeLabel}
-        paused={paused}
+        fillPct={miniFillPct}
+        steaming={miniSteaming}
+        urgent={miniUrgent}
+        theme={liquorTheme}
         onClick={openBrewModal}
       />
 

@@ -46,8 +46,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  let upstream: Response;
   try {
-    const upstream = await fetch("https://api.anthropic.com/v1/messages", {
+    upstream = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -59,15 +60,38 @@ export async function POST(req: NextRequest) {
         max_tokens: 1024,
         system,
         messages,
+        // The single biggest latency win available here: without this, the
+        // full reply (up to 1024 tokens) is generated, buffered whole by
+        // this route, then buffered whole again by the browser's fetch —
+        // nothing renders until the entire response is done, which for a
+        // long brewing explanation can be several seconds of a blank
+        // typing indicator. Streaming surfaces the first token as soon as
+        // Anthropic emits it.
+        stream: true,
       }),
     });
-
-    const data = await upstream.json();
-    return NextResponse.json(data, { status: upstream.status });
   } catch (err) {
     return NextResponse.json(
       { error: { message: err instanceof Error ? err.message : "Upstream request failed." } },
       { status: 502 }
     );
   }
+
+  // A non-200 response is a plain JSON error body, not a token stream —
+  // buffer and relay it as JSON exactly as before.
+  if (!upstream.ok || !upstream.body) {
+    const data = await upstream.json().catch(() => ({}));
+    return NextResponse.json(data, { status: upstream.status || 502 });
+  }
+
+  // Forward Anthropic's SSE stream straight through, chunk by chunk, rather
+  // than collecting it here first.
+  return new Response(upstream.body, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+    },
+  });
 }

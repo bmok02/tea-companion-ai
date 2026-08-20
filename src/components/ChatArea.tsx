@@ -1,18 +1,46 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useRef } from "react";
 import { formatText } from "@/lib/formatText";
 import { UiMessage } from "@/lib/types";
+
+interface ChatMessageProps {
+  message: UiMessage;
+  registerRef: (id: string, el: HTMLDivElement | null) => void;
+}
+
+// Streaming means `messages` now updates once per token-chunk instead of
+// once per reply — memoized so only the bubble whose own text actually
+// changed re-runs formatText and re-renders, not every earlier message in
+// the conversation on every chunk.
+const ChatMessage = memo(function ChatMessage({ message, registerRef }: ChatMessageProps) {
+  return (
+    <div
+      className={`msg ${message.role}`}
+      ref={(el) => registerRef(message.id, el)}
+    >
+      <div className="msg-avatar">{message.role === "assistant" ? "茶" : "人"}</div>
+      <div className="msg-bubble" dangerouslySetInnerHTML={{ __html: formatText(message.text) }} />
+    </div>
+  );
+});
 
 interface ChatAreaProps {
   messages: UiMessage[];
   isLoading: boolean;
 }
 
-export default function ChatArea({ messages, isLoading }: ChatAreaProps) {
+function ChatArea({ messages, isLoading }: ChatAreaProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const lastMessageId = messages[messages.length - 1]?.id;
+
+  // Stable across renders (messageRefs is a ref, not state) so it doesn't
+  // itself invalidate ChatMessage's memoization on every parent re-render.
+  const registerRef = useCallback((id: string, el: HTMLDivElement | null) => {
+    if (el) messageRefs.current.set(id, el);
+    else messageRefs.current.delete(id);
+  }, []);
 
   // Scroll to the top of the newest message instead of the bottom of the
   // chat, so a long reply starts in view rather than requiring a scroll-up.
@@ -57,20 +85,7 @@ export default function ChatArea({ messages, isLoading }: ChatAreaProps) {
       )}
 
       {messages.map((m) => (
-        <div
-          className={`msg ${m.role}`}
-          key={m.id}
-          ref={(el) => {
-            if (el) messageRefs.current.set(m.id, el);
-            else messageRefs.current.delete(m.id);
-          }}
-        >
-          <div className="msg-avatar">{m.role === "assistant" ? "茶" : "人"}</div>
-          <div
-            className="msg-bubble"
-            dangerouslySetInnerHTML={{ __html: formatText(m.text) }}
-          />
-        </div>
+        <ChatMessage key={m.id} message={m} registerRef={registerRef} />
       ))}
 
       {isLoading && (
@@ -90,3 +105,8 @@ export default function ChatArea({ messages, isLoading }: ChatAreaProps) {
     </div>
   );
 }
+
+// The brew timer ticks TeaCompanion's state every second while a session is
+// active; memoized so that tick doesn't re-render (and re-diff) the whole
+// message list when neither `messages` nor `isLoading` actually changed.
+export default memo(ChatArea);
