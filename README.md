@@ -1,24 +1,50 @@
-# 茶渊 · Tea Companion
+# 茶渊 · The Tea Companion
 
-A Next.js (App Router + TypeScript) port of the original single-file
-`tea_companion.html` app — a mindful brewing companion for Tea Chapter's
-teas, with an AI chat guide and a guided step-by-step brew timer.
+A mindful brewing companion built for Tea Chapter (9 Neil Road, Chinatown) —
+Singapore's oldest traditional Chinese teahouse, established 1989. The goal
+isn't "a chatbot that knows about tea." It's to slow someone down for the
+few minutes it takes to steep a cup: to turn brewing from a thing you wait
+out into a small ritual you actually notice.
 
-## What changed from the static HTML version
+## What it's trying to do
 
-- **Structure**: split into React components (`src/components`) and data/
-  logic modules (`src/lib`) instead of one big `<script>` block.
-- **Knowledge base**: the embedded tea catalogue now lives in
-  `src/lib/knowledgeBase.ts` (typed) and `src/lib/teaOptions.ts` (the
-  dropdown list), generated from the original data.
-- **API key handling**: the original page either called
-  `api.anthropic.com` directly from the browser (exposing your API key) or
-  pointed at an external Render proxy (`PROXY_URL`). This port replaces
-  both with a same-origin API route, [`src/app/api/chat/route.ts`](src/app/api/chat/route.ts),
-  which holds the Anthropic key server-side only.
-- Everything else — the tea selector, quick prompts, chat UI, and the
-  guided brew timer (with its floating mini-timer) — is a behavioral
-  1:1 port of the original vanilla JS.
+Most tea-brewing tools stop at temperature and timing. This one treats the
+steep itself as the point:
+
+- **A guided brew ritual, not just a timer.** Picking a tea and hitting
+  "Begin Brew Session" walks through warming the teaware, measuring leaves,
+  rinsing, and each steep in sequence — with an animated cup ([`BrewCup.tsx`](src/components/BrewCup.tsx))
+  that fills and steams as the seconds count down, so there's something to
+  watch instead of a bare number. A floating mini-timer ([`BrewMini.tsx`](src/components/BrewMini.tsx))
+  keeps the ritual visible even after you close the modal to read something
+  or chat.
+- **Real dead time, used deliberately.** During an actual steep — the
+  minute where there's genuinely nothing to do but wait — the modal
+  surfaces four prompts: a guided mindful-session narration, the tea's
+  history, a fun fact, and its health benefits (see `STEEP_PROMPTS` in
+  [`TeaCompanion.tsx`](src/components/TeaCompanion.tsx)). They exist
+  specifically for that gap, not as generic chat suggestions bolted onto
+  the top of the screen.
+- **A companion grounded in one specific place.** The AI guide isn't a
+  generic tea encyclopedia — its system prompt ([`teaBrewing.ts`](src/lib/teaBrewing.ts))
+  is built from Tea Chapter's own catalogue and business knowledge base
+  ([`knowledgeBase.ts`](src/lib/knowledgeBase.ts)): ~58 teas with category,
+  origin, aroma, taste, brewing instructions, and a `mindfulness_note` per
+  tea, plus the teahouse's own history (founded 1989, visited by Queen
+  Elizabeth II in 1989, its three distinct seating rooms). It's instructed
+  to guide attention to sensory detail — colour, aroma, warmth, taste —
+  and to keep mindfulness grounded and practical rather than reaching for
+  spiritual jargon.
+- **A flavour profile you can actually read.** For catalogue teas with
+  enough structured data, a six-axis chart ([`TeaProfileChart.tsx`](src/components/TeaProfileChart.tsx),
+  derived in [`teaVisuals.ts`](src/lib/teaVisuals.ts)) sketches body,
+  sweetness, floral, earthy, astringency, and brightness — alongside a
+  liquor colour theme that tints the brew cup and mini-timer to roughly
+  match what's actually in the pot.
+- **Protecting a brew already in progress.** Switching teas mid-steep asks
+  first, rather than silently discarding a timer that's running — small,
+  but it's the same instinct: the session in progress matters more than
+  a fast UI shortcut.
 
 ## Setup
 
@@ -31,25 +57,35 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-## Project layout
+## How it's built
+
+A Next.js (App Router + TypeScript) port of the original single-file
+`tea_companion.html` prototype, split into components and data/logic
+modules instead of one big `<script>` block. The chat companion streams
+its replies through a same-origin API route
+([`src/app/api/chat/route.ts`](src/app/api/chat/route.ts)), which is the
+only place the Anthropic API key ever lives — the browser never sees it.
 
 ```
 src/
   app/
-    api/chat/route.ts   # server-side proxy to the Anthropic Messages API
+    api/chat/route.ts   # server-side streaming proxy to the Anthropic Messages API
     layout.tsx           # fonts + metadata
     page.tsx              # renders <TeaCompanion />
-    globals.css           # ported 1:1 from the original <style> block
+    globals.css           # app styling
   components/
     TeaCompanion.tsx      # top-level state + layout
     ChatArea.tsx           # message list, welcome state, typing indicator
-    BrewModal.tsx           # guided brew timer modal
-    BrewMini.tsx            # floating mini-timer (shown when modal is closed)
+    BrewModal.tsx           # guided brew ritual modal
+    BrewMini.tsx             # floating mini-timer (shown when modal is closed)
+    BrewCup.tsx               # animated filling/steaming cup
+    TeaProfileChart.tsx        # six-axis flavour profile chart
   lib/
-    knowledgeBase.ts       # Tea Chapter catalogue (typed)
-    teaOptions.ts            # <select> options for the tea dropdown
+    knowledgeBase.ts       # Tea Chapter's catalogue + business info (typed)
+    teaOptions.ts            # catalogue combobox options
     teaBrewing.ts             # KB lookup, system-prompt builder, brew-step parser
-    formatText.ts              # lightweight markdown -> HTML for chat bubbles
+    teaVisuals.ts              # liquor colour + flavour profile derivation
+    formatText.ts               # lightweight markdown -> HTML for chat bubbles
     playBeep.ts                  # WebAudio chime on timer completion
     types.ts
 ```
