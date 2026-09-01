@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { BrewStep, countdownDisplay, fillPercent, formatBrewTime } from "@/lib/teaBrewing";
 import { LiquorTheme } from "@/lib/teaVisuals";
 import BrewCup from "./BrewCup";
@@ -31,7 +32,7 @@ interface BrewModalProps {
   onSteepPrompt: (text: string) => void;
 }
 
-export default function BrewModal({
+function BrewModal({
   open,
   title,
   steps,
@@ -236,3 +237,16 @@ export default function BrewModal({
     </div>
   );
 }
+
+// The brew timer ticks TeaCompanion's state every second the whole session
+// through, including while this modal sits closed behind the mini-timer
+// (visibility: hidden, not unmounted, so it can fade in/out) — without this,
+// every tick still rebuilds the full step list, cup SVG, and nav buttons for
+// a subtree nothing is looking at. Skip that reconcile whenever `open` was
+// false on both the last render and this one; the moment it actually opens
+// (or starts closing), `open` itself differs and a fresh render still fires,
+// so the frame shown is never stale.
+export default memo(BrewModal, (prev, next) => {
+  if (!prev.open && !next.open) return true;
+  return false;
+});

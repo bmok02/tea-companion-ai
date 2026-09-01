@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { FlavorAxis } from "@/lib/teaVisuals";
 
 interface TeaProfileChartProps {
@@ -18,7 +19,7 @@ function pointFor(i: number, total: number, r: number): [number, number] {
   return [CENTER + r * Math.cos(angle), CENTER + r * Math.sin(angle)];
 }
 
-export default function TeaProfileChart({ axes, color }: TeaProfileChartProps) {
+function TeaProfileChart({ axes, color }: TeaProfileChartProps) {
   const n = axes.length;
   const valuePoints = axes
     .map((a, i) => pointFor(i, n, (a.value / MAX_VAL) * MAX_R))
@@ -69,3 +70,11 @@ export default function TeaProfileChart({ axes, color }: TeaProfileChartProps) {
     </svg>
   );
 }
+
+// `axes` and `color` are both derived with useMemo in TeaCompanion from the
+// selected tea alone, so their references only change on a tea switch — but
+// without memo here, this 18-element SVG still gets rebuilt and diffed on
+// every render TeaCompanion does, including the brew timer's once-a-second
+// tick for the entire session. Plain memo (shallow prop compare) is enough
+// since those references really are stable in between.
+export default memo(TeaProfileChart);

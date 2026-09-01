@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { LiquorTheme } from "@/lib/teaVisuals";
 import BrewCup from "./BrewCup";
 
@@ -14,7 +15,7 @@ interface BrewMiniProps {
   onClick: () => void;
 }
 
-export default function BrewMini({
+function BrewMini({
   visible,
   stepLabel,
   timeLabel,
@@ -38,3 +39,14 @@ export default function BrewMini({
     </div>
   );
 }
+
+// Mirrors BrewModal's memoization: while the big modal is open, this floating
+// pill sits invisible (display: none via `visible`), but its step/time/fill
+// props still get recomputed every tick by the same brew-timer interval —
+// skip the reconcile whenever `visible` was false on both the last render
+// and this one, so only whichever of the two is actually on screen does real
+// per-second work.
+export default memo(BrewMini, (prev, next) => {
+  if (!prev.visible && !next.visible) return true;
+  return false;
+});
