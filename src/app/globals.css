@@ -1283,12 +1283,12 @@ body::before {
      instead of the low-contrast muted-brown-on-brown they'd otherwise get. */
   --ink-muted: rgba(255, 255, 255, 0.55);
   border: 1px solid var(--border);
-  border-radius: 14px;
-  padding: 14px 22px 14px 14px;
+  border-radius: 22px;
+  padding: 8px 16px 8px 10px;
   font-family: 'Cormorant Garamond', serif;
   cursor: pointer;
   z-index: 400;
-  gap: 14px;
+  gap: 10px;
   align-items: center;
   box-shadow: 0 12px 32px rgba(26, 18, 11, 0.28);
   transition:
@@ -1316,30 +1316,30 @@ body::before {
 /* Scaled down from the modal's default 88×82 — same component, same
    liquor-colour fill and steam, just sized to fit a floating card. */
 .brew-mini .brew-cup svg {
-  width: 60px;
-  height: 56px;
+  width: 34px;
+  height: 32px;
 }
 .brew-mini .brew-cup-steam {
-  width: 28px;
-  height: 18px;
+  width: 16px;
+  height: 10px;
 }
 .brew-mini .brew-cup-wisp {
-  width: 6px;
-  height: 10px;
+  width: 3px;
+  height: 6px;
 }
 .brew-mini-text {
   line-height: 1;
 }
 .brew-mini-step {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--ink-muted);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
 .brew-mini-time {
   font-family: 'IM Fell English', serif;
-  font-size: 30px;
+  font-size: 17px;
   letter-spacing: 0.02em;
   transition: color 0.3s var(--ease-calm);
 }
