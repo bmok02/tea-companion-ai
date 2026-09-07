@@ -88,6 +88,61 @@ export default function TeaCompanion() {
   const historyRef = useRef<ChatApiMessage[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // ── Voice entry ────────────────────────────────────────────────────────
+  // Dictation rides the browser's own Web Speech API (Chrome/Edge/Safari;
+  // no Firefox support) instead of a server round-trip — it's free, needs
+  // no API key, and the recognizer only ever writes into the same
+  // inputValue the textarea already renders, so typing mid-dictation just
+  // works. baseTextRef holds whatever was typed before the mic was pressed,
+  // since the recognizer's interim results replace rather than append.
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const baseTextRef = useRef("");
+
+  useEffect(() => {
+    const SpeechRecognitionCtor =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionCtor) return;
+    // One-time client-only feature detection — the mic button must stay
+    // hidden through SSR/hydration (no `window` on the server) and can only
+    // flip on after mount, so this can't be a lazy useState initializer.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSpeechSupported(true);
+
+    const recognition = new SpeechRecognitionCtor();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+
+    recognition.onresult = (e: SpeechRecognitionEvent) => {
+      let transcript = "";
+      for (let i = 0; i < e.results.length; i++) {
+        transcript += e.results[i][0].transcript;
+      }
+      const base = baseTextRef.current;
+      setInputValue(base + (base && transcript ? " " : "") + transcript);
+    };
+    recognition.onerror = () => setIsListening(false);
+    recognition.onend = () => setIsListening(false);
+
+    recognitionRef.current = recognition;
+    return () => recognition.stop();
+  }, []);
+
+  function toggleListening() {
+    const recognition = recognitionRef.current;
+    if (!recognition) return;
+    if (isListening) {
+      recognition.stop();
+      setIsListening(false);
+      return;
+    }
+    baseTextRef.current = inputValue.trim();
+    recognition.start();
+    setIsListening(true);
+  }
+
   // ── Brew timer ─────────────────────────────────────────────────────────
   const [brewSteps, setBrewSteps] = useState<BrewStep[]>([]);
   const [currentStep, setCurrentStep] = useState(-1); // -1 = not started
@@ -720,6 +775,31 @@ export default function TeaCompanion() {
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKey}
           />
+          {speechSupported && (
+            <button
+              type="button"
+              className={`mic-btn${isListening ? " listening" : ""}`}
+              onClick={toggleListening}
+              title={isListening ? "Stop dictation" : "Speak your message"}
+              aria-pressed={isListening}
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+                <line x1="12" y1="18" x2="12" y2="22" />
+                <line x1="8" y1="22" x2="16" y2="22" />
+              </svg>
+            </button>
+          )}
           <button
             className="send-btn"
             id="sendBtn"
