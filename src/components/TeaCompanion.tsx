@@ -15,8 +15,13 @@ import {
 } from "@/lib/teaBrewing";
 import { getLiquorTheme, getFlavorProfile } from "@/lib/teaVisuals";
 import { playBeep } from "@/lib/playBeep";
+import { useWakeLock } from "@/lib/useWakeLock";
+import { useNarration } from "@/lib/useNarration";
+import { useAmbient } from "@/lib/useAmbient";
 import { ChatApiMessage, UiMessage } from "@/lib/types";
 import TeaProfileChart from "./TeaProfileChart";
+import TrayScene from "./TrayScene";
+import ChatDock from "./ChatDock";
 
 // "How to brew" used to live here too, but it was pure overlap: asking the
 // chat companion for brewing steps just produced a worse copy of the
@@ -26,11 +31,29 @@ import TeaProfileChart from "./TeaProfileChart";
 // specifically during a step's countdown, where there's real dead time to
 // fill instead of competing with the "start brewing" call to action.
 const STEEP_PROMPTS = [
-  { icon: "🧘", label: "Mindful session", text: "Guide me through a mindful tea session" },
-  { icon: "📜", label: "History & origins", text: "Tell me the history and origins of this tea" },
-  { icon: "✨", label: "Fun fact", text: "Share a fun fact or story about this tea" },
-  { icon: "🌿", label: "Health benefits", text: "What are the health benefits of this tea?" },
+  { label: "Mindful session", text: "Guide me through a mindful tea session" },
+  { label: "History & origins", text: "Tell me the history and origins of this tea" },
+  { label: "Fun fact", text: "Share a fun fact or story about this tea" },
+  { label: "Health benefits", text: "What are the health benefits of this tea?" },
 ];
+
+// A brew in progress survives a refresh: the tea and where the timer stood
+// are kept here, and the steps themselves are rebuilt from the tea. Old sessions are dropped — a cup
+// abandoned last night shouldn't greet you this morning.
+const BREW_STORAGE_KEY = "teaCompanion.brew.v1";
+const BREW_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+const EXTEND_SECONDS = 10;
+
+interface SavedBrew {
+  tea: string;
+  currentStep: number;
+  secondsLeft: number;
+  totalSeconds: number;
+  started: boolean;
+  paused: boolean;
+  finished: boolean;
+  savedAt: number;
+}
 
 export default function TeaCompanion() {
   // ── Tea selection ──────────────────────────────────────────────────────
@@ -42,13 +65,12 @@ export default function TeaCompanion() {
   const [comboOpen, setComboOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const comboRootRef = useRef<HTMLDivElement>(null);
-  const [teaInputValue, setTeaInputValue] = useState("");
   const [currentTea, setCurrentTeaState] = useState("");
   // A tea change that would end an in-progress brew waits here for the
   // drinker to confirm, instead of discarding their steep silently.
   const [pendingTeaChange, setPendingTeaChange] = useState<{
     name: string;
-    source: "combobox" | "input";
+    source: "combobox" | "clear";
   } | null>(null);
   const confirmKeepBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -82,6 +104,9 @@ export default function TeaCompanion() {
   }
 
   // ── Chat ───────────────────────────────────────────────────────────────
+  // A corner dock (Guide | Chat), reached on demand — the guided brew is the
+  // app's main feature, chat is one tap away without hiding the timer.
+  const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -144,7 +169,11 @@ export default function TeaCompanion() {
   }
 
   // ── Brew timer ─────────────────────────────────────────────────────────
-  const [brewSteps, setBrewSteps] = useState<BrewStep[]>([]);
+  // Tea Chapter's tea bags are pre-portioned, so the catalogue's own timings
+  // are the brew — nothing to tune.
+  const [brewSteps, setBaseSteps] = useState<BrewStep[]>([]);
+  const [resumedNote, setResumedNote] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
   const [currentStep, setCurrentStep] = useState(-1); // -1 = not started
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [totalSeconds, setTotalSeconds] = useState(0);
@@ -152,17 +181,18 @@ export default function TeaCompanion() {
   const [paused, setPaused] = useState(false);
   const [finished, setFinished] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-
-  useEffect(() => {
-    textareaRef.current?.focus();
-  }, []);
+  const narration = useNarration();
+  // Zen music dips while the companion is speaking
+  const ambient = useAmbient(narration.guideSpeaking || narration.replySpeaking);
 
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = "auto";
     el.style.height = Math.min(el.scrollHeight, 140) + "px";
-  }, [inputValue]);
+    // chatOpen: the textarea sits in a hidden dock panel until opened, so
+    // re-measure once it's actually laid out.
+  }, [inputValue, chatOpen]);
 
   // ── Assistant message helper ──────────────────────────────────────────
   function addAssistantMessage(text: string) {
@@ -187,9 +217,10 @@ export default function TeaCompanion() {
     if (name !== currentTea) resetBrew();
     setCurrentTeaState(name);
     setPendingTeaChange(null);
+    if (!name) setTeaQuery("");
   }
 
-  function requestTeaChange(name: string, source: "combobox" | "input") {
+  function requestTeaChange(name: string, source: "combobox" | "clear") {
     if (name === currentTea) return;
     if (hasActiveBrewProgress) {
       setPendingTeaChange({ name, source });
@@ -207,8 +238,22 @@ export default function TeaCompanion() {
     // Roll back only the field that proposed the change — currentTea (and
     // the badge showing it) never moved, so there's nothing else to restore.
     if (pendingTeaChange.source === "combobox") setTeaQuery("");
-    else setTeaInputValue("");
     setPendingTeaChange(null);
+  }
+
+  // The X on the tea line: empty both fields and unload the tea. Like any
+  // tea change it asks first if a brew is under way; the fields stay as they
+  // are until that's confirmed.
+  const canClearTea = !!(teaQuery || currentTea);
+  function clearTea() {
+    if (currentTea && hasActiveBrewProgress) {
+      setPendingTeaChange({ name: "", source: "clear" });
+      return;
+    }
+    setTeaQuery("");
+    setComboOpen(false);
+    setActiveIndex(-1);
+    if (currentTea) commitTeaChange("");
   }
 
   // ── Tea catalogue combobox ──────────────────────────────────────────────
@@ -232,7 +277,6 @@ export default function TeaCompanion() {
     setTeaQuery(opt.label);
     setComboOpen(false);
     setActiveIndex(-1);
-    setTeaInputValue("");
     requestTeaChange(opt.value, "combobox");
   }
 
@@ -289,27 +333,8 @@ export default function TeaCompanion() {
   // commits (and can trip the confirmation above) on blur or Enter, not on
   // every keystroke — a single stray character used to be enough to reset
   // an active timed brew with no warning at all.
-  function onTeaInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setTeaInputValue(e.target.value);
-  }
-
-  function commitTeaInput() {
-    const trimmed = teaInputValue.trim();
-    if (!trimmed) return;
-    setTeaQuery("");
-    requestTeaChange(trimmed, "input");
-  }
-
-  function onTeaInputKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      commitTeaInput();
-      e.currentTarget.blur();
-    }
-  }
-
   // Escape backs out of a pending tea-switch confirmation from anywhere —
-  // the combobox, the text field, or the confirmation bar's own buttons.
+  // the combobox or the confirmation bar's own buttons.
   useEffect(() => {
     if (!pendingTeaChange) return;
     function onKeyDown(e: KeyboardEvent) {
@@ -416,6 +441,8 @@ export default function TeaCompanion() {
         ...historyRef.current,
         { role: "assistant", content: streamedText || "(No response)" },
       ];
+      // Read the finished reply aloud in the companion's voice.
+      if (streamedText) narration.speakReply(streamedText);
     } catch (err) {
       const message = `Something went wrong: ${err instanceof Error ? err.message : "unknown error"}. Please try again.`;
       if (assistantId) {
@@ -437,13 +464,12 @@ export default function TeaCompanion() {
     sendMessage(text);
   }
 
-  // A steep prompt sends into the same chat behind the modal, then closes
-  // the modal so that chat (and the reply streaming in) is actually visible
-  // — the timer itself keeps running underneath, picked up by the floating
-  // mini-timer (BrewMini) the moment the modal closes.
+  // A steep prompt sends into chat, then opens the notes drawer so the
+  // reply streaming in is actually visible — the brew itself stays exactly
+  // where it was, full-screen, underneath.
   function steepPrompt(text: string) {
     quickPrompt(text);
-    closeBrewModal();
+    setChatOpen(true);
   }
 
   function handleKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -455,7 +481,8 @@ export default function TeaCompanion() {
 
   // ── Brew timer ─────────────────────────────────────────────────────────
   function resetBrew() {
-    setBrewSteps([]);
+    setBaseSteps([]);
+    setResumedNote(false);
     setCurrentStep(-1);
     setStarted(false);
     setPaused(false);
@@ -468,6 +495,7 @@ export default function TeaCompanion() {
   function jumpToStep(i: number, stepsOverride?: BrewStep[]) {
     const steps = stepsOverride ?? brewSteps;
     if (i < 0 || i >= steps.length) return;
+    setResumedNote(false);
     setCurrentStep(i);
     setPaused(false);
     setStarted(false);
@@ -484,16 +512,25 @@ export default function TeaCompanion() {
     }
     if (currentStep === -1) {
       const tea = findTea(currentTea);
-      const steps = parseBrewSteps(tea || { description: "", name: currentTea });
-      if (!steps) return;
-      setBrewSteps(steps);
-      jumpToStep(0, steps);
+      const parsed = parseBrewSteps(tea || { description: "", name: currentTea });
+      if (!parsed) return;
+      setBaseSteps(parsed);
+      jumpToStep(0, parsed);
     }
+    narration.prime();
     setModalOpen(true);
   }
 
   function closeBrewModal() {
+    setResumedNote(false);
     setModalOpen(false);
+  }
+
+  function extendSteep() {
+    if (!started || finished) return;
+    endsAtRef.current += EXTEND_SECONDS * 1000;
+    setSecondsLeft((s) => s + EXTEND_SECONDS);
+    setTotalSeconds((t) => t + EXTEND_SECONDS);
   }
 
   function startBrewTimer() {
@@ -501,6 +538,7 @@ export default function TeaCompanion() {
   }
 
   function brewPauseResume() {
+    setResumedNote(false);
     setPaused((p) => !p);
   }
 
@@ -521,15 +559,22 @@ export default function TeaCompanion() {
   }, [secondsLeft]);
 
   // Ticking interval — active only while a timed step has been started,
-  // isn't paused, and hasn't finished yet.
+  // isn't paused, and hasn't finished yet. It counts down against a wall-clock
+  // deadline rather than "minus one per tick": browsers throttle timers in
+  // background tabs and on locked phones, and subtracting a second per tick
+  // would let a steep quietly run long. The deadline is re-derived from
+  // secondsLeft whenever the clock (re)starts, so pause/resume and a restored
+  // session both pick up correctly.
+  const endsAtRef = useRef(0);
   useEffect(() => {
     if (!started || paused || finished) return;
     const step = brewSteps[currentStep];
     if (!step || step.seconds <= 0) return;
 
+    endsAtRef.current = Date.now() + secondsLeftRef.current * 1000;
     const id = setInterval(() => {
-      const next = secondsLeftRef.current - 1;
-      if (next <= 0) {
+      const remaining = Math.ceil((endsAtRef.current - Date.now()) / 1000);
+      if (remaining <= 0) {
         clearInterval(id);
         setSecondsLeft(0);
         playBeep();
@@ -542,13 +587,93 @@ export default function TeaCompanion() {
           jumpToStep(currentStep + 1);
         }
       } else {
-        setSecondsLeft(next);
+        setSecondsLeft(remaining);
       }
-    }, 1000);
+    }, 250);
 
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [started, paused, finished, currentStep]);
+
+  // ── Resume after a refresh ────────────────────────────────────────────
+  // One-time client-only read of storage on mount; it can't be a lazy state
+  // initializer without a hydration mismatch, so it sets state from an effect.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(BREW_STORAGE_KEY);
+      const saved: SavedBrew | null = raw ? JSON.parse(raw) : null;
+      if (saved && Date.now() - saved.savedAt < BREW_MAX_AGE_MS) {
+        const tea = findTea(saved.tea);
+        const parsed = parseBrewSteps(tea || { description: "", name: saved.tea });
+        if (parsed && saved.currentStep >= 0 && saved.currentStep < parsed.length) {
+          // A running clock kept running while the page was gone.
+          const running = saved.started && !saved.paused && !saved.finished;
+          const left = running
+            ? saved.secondsLeft - Math.floor((Date.now() - saved.savedAt) / 1000)
+            : saved.secondsLeft;
+          const timesUp = running && left <= 0;
+
+          setCurrentTeaState(saved.tea);
+          const option = TEA_OPTIONS.find((o) => o.value === saved.tea);
+          if (option) setTeaQuery(option.label);
+          else setTeaQuery(saved.tea);
+          setBaseSteps(parsed);
+          setCurrentStep(saved.currentStep);
+          setStarted(saved.started);
+          setPaused(saved.paused);
+          setFinished(saved.finished || timesUp);
+          setSecondsLeft(Math.max(0, left));
+          setTotalSeconds(saved.totalSeconds);
+          setModalOpen(true);
+          setResumedNote(true);
+        }
+      }
+    } catch {
+      // Corrupt or unavailable storage just means starting fresh.
+    }
+    setHydrated(true);
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      const complete = brewSteps.length > 0 && currentStep === brewSteps.length - 1;
+      if (brewSteps.length === 0 || currentStep < 0 || complete) {
+        localStorage.removeItem(BREW_STORAGE_KEY);
+      } else {
+        const saved: SavedBrew = {
+          tea: currentTea,
+          currentStep,
+          secondsLeft,
+          totalSeconds,
+          started,
+          paused,
+          finished,
+          savedAt: Date.now(),
+        };
+        localStorage.setItem(BREW_STORAGE_KEY, JSON.stringify(saved));
+      }
+    } catch {
+      // Private mode or full storage — the brew just won't survive a refresh.
+    }
+  }, [
+    hydrated,
+    brewSteps.length,
+    currentTea,
+    currentStep,
+    secondsLeft,
+    totalSeconds,
+    started,
+    paused,
+    finished,
+  ]);
+
+  // Hold the screen awake for as long as a brew is genuinely in flight
+  // (timing, or between steeps waiting to pour) — not while paused, and not
+  // once the last "pour & enjoy" step means the ritual is over.
+  const wakeLocked = useWakeLock(hasActiveBrewProgress && !paused);
 
   // ── Derived brew-mini state ───────────────────────────────────────────
   const miniActive = currentStep >= 0 && currentStep < brewSteps.length;
@@ -571,12 +696,19 @@ export default function TeaCompanion() {
 
   return (
     <div className="app">
-      {/* Header */}
-      <div className="header">
-        <div className="header-logo">茶渊 · Tea Chapter</div>
-        <h1>The Tea Companion</h1>
-        <div className="header-sub">Brewing · Mindfulness · Heritage</div>
-      </div>
+      {/* The tray, greeted straight away — no form, no chat, before anything
+          else. Picking a tea "loads" it; the same scene carries into the
+          full-screen brew once one starts (see BrewModal). */}
+      <section className="tray-hero">
+        <TrayScene theme={liquorTheme} presence={currentTea ? 1 : 0.45} />
+        <div className="tray-hero-caption">
+          <h1>
+            <span className="tray-hero-mark">茶渊</span>
+            The Tea Companion
+          </h1>
+          <p className="tray-hero-tagline">A guided brewing ritual for Tea Chapter&rsquo;s own teas</p>
+        </div>
+      </section>
 
       {/* Tea Selector */}
       <div className="tea-selector">
@@ -601,11 +733,25 @@ export default function TeaCompanion() {
             onChange={onComboChange}
             onKeyDown={onComboKeyDown}
           />
+          {canClearTea && (
+            <button
+              type="button"
+              className="tea-clear-btn"
+              onClick={clearTea}
+              aria-label="Clear tea"
+              title="Clear tea"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
+                <line x1="5" y1="5" x2="19" y2="19" />
+                <line x1="19" y1="5" x2="5" y2="19" />
+              </svg>
+            </button>
+          )}
           {comboOpen && (
             <ul className="tea-combobox-list" id="teaOptionList" role="listbox">
               {filteredTeaOptions.length === 0 ? (
                 <li className="tea-combobox-empty" role="presentation">
-                  No catalogue matches — try the name field instead.
+                  No catalogue matches — try another name.
                 </li>
               ) : (
                 filteredTeaOptions.map((opt, i) => (
@@ -626,17 +772,6 @@ export default function TeaCompanion() {
             </ul>
           )}
         </div>
-        <span className="or-divider">or</span>
-        <input
-          type="text"
-          id="teaInput"
-          aria-labelledby="teaSelectorLabel"
-          placeholder="type tea name…"
-          value={teaInputValue}
-          onChange={onTeaInputChange}
-          onBlur={commitTeaInput}
-          onKeyDown={onTeaInputKeyDown}
-        />
         <span className={`current-tea-badge${currentTea ? " visible" : ""}`} id="teaBadge">
           {currentTea || "—"}
         </span>
@@ -651,8 +786,14 @@ export default function TeaCompanion() {
         // moves real keyboard focus onto it since an alert alone doesn't.
         <div className="tea-switch-confirm" role="alert">
           <span className="tea-switch-confirm-text">
-            Switch to <strong>{pendingTeaChange.name}</strong>? Your {currentTea} brew is still
-            going — this will end it.
+            {pendingTeaChange.name ? (
+              <>
+                Switch to <strong>{pendingTeaChange.name}</strong>?
+              </>
+            ) : (
+              "Clear your tea?"
+            )}{" "}
+            Your {currentTea} brew is still going — this will end it.
           </span>
           <div className="tea-switch-confirm-actions">
             <button
@@ -663,7 +804,7 @@ export default function TeaCompanion() {
               Keep brewing {currentTea}
             </button>
             <button className="tea-switch-btn tea-switch-confirm-btn" onClick={confirmTeaChange}>
-              Switch tea
+              {pendingTeaChange.name ? "Switch tea" : "Clear tea"}
             </button>
           </div>
         </div>
@@ -680,7 +821,7 @@ export default function TeaCompanion() {
             onClick={() => setProfileOpen((o) => !o)}
             aria-expanded={profileOpen}
           >
-            <span aria-hidden="true">🌸</span> Flavour profile{" "}
+            Flavour profile{" "}
             <span className="tea-profile-toggle-caret" aria-hidden="true">
               {profileOpen ? "▲" : "▼"}
             </span>
@@ -717,12 +858,10 @@ export default function TeaCompanion() {
             onClick={openBrewModal}
             disabled={!currentTea}
           >
-            <span>🫖</span> Begin Brew Session
+            Begin Brew Session
           </button>
           {!currentTea && (
-            <p className="brew-now-hint">
-              <span aria-hidden="true">☝️</span> Select a tea above to begin
-            </p>
+            <p className="brew-now-hint">Select a tea above to begin</p>
           )}
         </div>
       </div>
@@ -744,8 +883,11 @@ export default function TeaCompanion() {
         onNext={brewNextStep}
         onPrev={brewPrevStep}
         onJumpToStep={(i) => jumpToStep(i)}
-        steepPrompts={STEEP_PROMPTS}
-        onSteepPrompt={steepPrompt}
+        narration={narration}
+        onExtend={extendSteep}
+        extendSeconds={EXTEND_SECONDS}
+        resumed={resumedNote}
+        wakeLocked={wakeLocked}
       />
 
       <BrewMini
@@ -759,29 +901,80 @@ export default function TeaCompanion() {
         onClick={openBrewModal}
       />
 
-      {/* Chat Area */}
-      <ChatArea messages={messages} isLoading={isLoading} />
-
-      {/* Input */}
-      <div className="input-area">
-        <div className="input-row">
-          <textarea
-            ref={textareaRef}
-            className="msg-input"
-            id="msgInput"
-            placeholder="Ask about brewing, history, mindfulness…"
-            rows={1}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKey}
-          />
-          {speechSupported && (
+      {/* Chat lives in the corner dock — toggled Guide | Chat, or opened by a
+          steep prompt; never the default view. */}
+      <ChatDock
+        open={chatOpen}
+        onOpenChange={setChatOpen}
+        teaName={currentTea}
+        voiceMuted={narration.replyMuted}
+        voiceSpeaking={narration.replySpeaking}
+        onToggleVoice={narration.toggleReplyMute}
+        musicPlaying={ambient.playing}
+        onToggleMusic={ambient.toggle}
+        musicVolume={ambient.volume}
+        onMusicVolume={ambient.setVolume}
+      >
+        {/* Only while there's an actual countdown running (a rinse or a
+            steep) — that's real dead time, unlike the untimed "measure your
+            leaves" or "pour & enjoy" steps, which are hands-on rather than
+            waiting. */}
+        {modalOpen && miniIsTimed && (
+          <div className="brew-modal-steep-prompts">
+            <span className="brew-modal-steep-prompts-label">While you steep, ask me</span>
+            <div className="brew-modal-steep-prompts-row">
+              {STEEP_PROMPTS.map((sp) => (
+                <button className="qp-btn" key={sp.text} onClick={() => steepPrompt(sp.text)}>
+                  {sp.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <ChatArea messages={messages} isLoading={isLoading} onSpeak={(t) => narration.speakReply(t, true)} />
+        <div className="input-area">
+          <div className="input-row">
+            <textarea
+              ref={textareaRef}
+              className="msg-input"
+              id="msgInput"
+              placeholder="Ask about brewing, history, mindfulness…"
+              rows={1}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKey}
+            />
+            {speechSupported && (
+              <button
+                type="button"
+                className={`mic-btn${isListening ? " listening" : ""}`}
+                onClick={toggleListening}
+                title={isListening ? "Stop dictation" : "Speak your message"}
+                aria-pressed={isListening}
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+                  <line x1="12" y1="18" x2="12" y2="22" />
+                  <line x1="8" y1="22" x2="16" y2="22" />
+                </svg>
+              </button>
+            )}
             <button
-              type="button"
-              className={`mic-btn${isListening ? " listening" : ""}`}
-              onClick={toggleListening}
-              title={isListening ? "Stop dictation" : "Speak your message"}
-              aria-pressed={isListening}
+              className="send-btn"
+              id="sendBtn"
+              onClick={() => sendMessage()}
+              disabled={isLoading}
+              title="Send"
             >
               <svg
                 width="18"
@@ -793,36 +986,13 @@ export default function TeaCompanion() {
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
-                <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
-                <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
-                <line x1="12" y1="18" x2="12" y2="22" />
-                <line x1="8" y1="22" x2="16" y2="22" />
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
               </svg>
             </button>
-          )}
-          <button
-            className="send-btn"
-            id="sendBtn"
-            onClick={() => sendMessage()}
-            disabled={isLoading}
-            title="Send"
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <line x1="22" y1="2" x2="11" y2="13"></line>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-            </svg>
-          </button>
+          </div>
         </div>
-      </div>
+      </ChatDock>
     </div>
   );
 }

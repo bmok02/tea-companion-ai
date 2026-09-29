@@ -70,6 +70,17 @@ export interface BrewStep {
   label: string;
   sub: string;
   seconds: number;
+  // Each kind drives its own animated scene (see BrewScene.tsx). Timings are
+  // fixed: Tea Chapter's tea bags are pre-portioned, so nothing to tune.
+  kind?: "warm" | "measure" | "rinse" | "steep" | "pour";
+  num?: number;
+}
+
+function steepSub(num: number, secs: number): string {
+  const timeStr = formatBrewTime(secs);
+  return num === 1
+    ? `Pour hot water in, put the lid on, and wait ${timeStr}.`
+    : `Pour hot water in again and wait ${timeStr}. Notice how the flavour shifts.`;
 }
 
 export function parseBrewSteps(tea: Tea | { description: string; name: string }): BrewStep[] | null {
@@ -88,26 +99,27 @@ export function parseBrewSteps(tea: Tea | { description: string; name: string })
 
   // Preheat
   steps.push({
-    label: "Warm your teaware",
-    sub: "Swirl hot water in your teapot and cups, then pour it out. This warms the teaware for an even brew.",
+    label: "Warm the gaiwan",
+    sub: "Pour in hot water, swirl it around, then pour it out.",
     seconds: 0,
+    kind: "warm",
   });
 
-  // Measure
-  const weightMatch = src.match(/(\d[\d–-]+)\s*g/);
-  const weight = weightMatch ? weightMatch[1] + "g" : "5–7g";
+  // Tea bag — Tea Chapter's bags are pre-portioned, so no weighing.
   steps.push({
-    label: "Measure your tea leaves",
-    sub: `Add about ${weight} of loose leaves — enough to loosely cover the bottom of the pot or gaiwan.`,
+    label: "Add one tea bag",
+    sub: "Drop one tea bag into the gaiwan. It's already the right amount.",
     seconds: 0,
+    kind: "measure",
   });
 
   // Rinse
   if (hasRinse && !isGreen) {
     steps.push({
-      label: "Rinse the leaves (quick wash)",
-      sub: "Fill the pot with hot water, then pour it straight out — don't drink this. It opens the leaves and rinses off dust.",
+      label: "Quick rinse",
+      sub: "Pour hot water over the bag, then pour it straight out. Don't drink this one.",
       seconds: 8,
+      kind: "rinse",
     });
   }
 
@@ -152,19 +164,16 @@ export function parseBrewSteps(tea: Tea | { description: string; name: string })
 
   for (const { num, secs } of steepTimes) {
     const ordinal = num === 1 ? "1st" : num === 2 ? "2nd" : num === 3 ? "3rd" : `${num}th`;
-    const label = `${ordinal} steep — pour hot water over the leaves`;
-    const timeStr = formatBrewTime(secs);
-    const sub =
-      num === 1
-        ? `Fill the pot with hot water and steep for ${timeStr}. Then pour it all out — don't let it over-brew.`
-        : `Fill the pot again and steep for ${timeStr}. Notice how the flavour shifts from the last cup.`;
-    steps.push({ label, sub, seconds: secs });
+    const label = `${ordinal} steep`;
+    const sub = steepSub(num, secs);
+    steps.push({ label, sub, seconds: secs, kind: "steep", num });
   }
 
   steps.push({
-    label: "Pour & enjoy your tea",
-    sub: "Pour in a circular motion to fill each cup evenly. Breathe in the aroma, then sip slowly.",
+    label: "Pour & enjoy",
+    sub: "Pour into your cups. Breathe in the aroma, then sip slowly.",
     seconds: 0,
+    kind: "pour",
   });
   return steps;
 }
