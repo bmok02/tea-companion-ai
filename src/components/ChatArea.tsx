@@ -7,20 +7,37 @@ import { UiMessage } from "@/lib/types";
 interface ChatMessageProps {
   message: UiMessage;
   registerRef: (id: string, el: HTMLDivElement | null) => void;
+  onSpeak: (text: string) => void;
 }
 
 // Streaming means `messages` now updates once per token-chunk instead of
 // once per reply — memoized so only the bubble whose own text actually
 // changed re-runs formatText and re-renders, not every earlier message in
 // the conversation on every chunk.
-const ChatMessage = memo(function ChatMessage({ message, registerRef }: ChatMessageProps) {
+const ChatMessage = memo(function ChatMessage({ message, registerRef, onSpeak }: ChatMessageProps) {
   return (
     <div
       className={`msg ${message.role}`}
       ref={(el) => registerRef(message.id, el)}
     >
       <div className="msg-avatar">{message.role === "assistant" ? "茶" : "人"}</div>
-      <div className="msg-bubble" dangerouslySetInnerHTML={{ __html: formatText(message.text) }} />
+      <div className="msg-bubble">
+        <div dangerouslySetInnerHTML={{ __html: formatText(message.text) }} />
+        {message.role === "assistant" && (
+          <button
+            type="button"
+            className="msg-listen"
+            onClick={() => onSpeak(message.text)}
+            aria-label="Listen to this reply"
+            title="Listen"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+            </svg>
+          </button>
+        )}
+      </div>
     </div>
   );
 });
@@ -28,9 +45,10 @@ const ChatMessage = memo(function ChatMessage({ message, registerRef }: ChatMess
 interface ChatAreaProps {
   messages: UiMessage[];
   isLoading: boolean;
+  onSpeak: (text: string) => void;
 }
 
-function ChatArea({ messages, isLoading }: ChatAreaProps) {
+function ChatArea({ messages, isLoading, onSpeak }: ChatAreaProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const lastMessageId = messages[messages.length - 1]?.id;
@@ -85,7 +103,7 @@ function ChatArea({ messages, isLoading }: ChatAreaProps) {
       )}
 
       {messages.map((m) => (
-        <ChatMessage key={m.id} message={m} registerRef={registerRef} />
+        <ChatMessage key={m.id} message={m} registerRef={registerRef} onSpeak={onSpeak} />
       ))}
 
       {isLoading && (

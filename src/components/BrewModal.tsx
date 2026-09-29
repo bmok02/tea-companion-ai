@@ -1,15 +1,11 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useEffect } from "react";
 import { BrewStep, countdownDisplay, fillPercent, formatBrewTime } from "@/lib/teaBrewing";
 import { LiquorTheme } from "@/lib/teaVisuals";
-import BrewCup from "./BrewCup";
-
-interface SteepPrompt {
-  icon: string;
-  label: string;
-  text: string;
-}
+import { useNarration } from "@/lib/useNarration";
+import { ZH_UI, zhStep } from "@/lib/brewZh";
+import BrewScene, { BrewSceneMode } from "./BrewScene";
 
 interface BrewModalProps {
   open: boolean;
@@ -22,15 +18,26 @@ interface BrewModalProps {
   paused: boolean;
   finished: boolean;
   liquorTheme: LiquorTheme;
+  narration: ReturnType<typeof useNarration>;
   onClose: () => void;
   onStart: () => void;
   onPauseResume: () => void;
   onNext: () => void;
   onPrev: () => void;
   onJumpToStep: (i: number) => void;
-  steepPrompts: SteepPrompt[];
-  onSteepPrompt: (text: string) => void;
+  onExtend: () => void;
+  extendSeconds: number;
+  resumed: boolean;
+  wakeLocked: boolean;
 }
+
+const ICON = {
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 2.2,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+};
 
 function BrewModal({
   open,
@@ -43,72 +50,83 @@ function BrewModal({
   paused,
   finished,
   liquorTheme,
+  narration,
   onClose,
   onStart,
   onPauseResume,
   onNext,
   onPrev,
   onJumpToStep,
-  steepPrompts,
-  onSteepPrompt,
+  onExtend,
+  extendSeconds,
+  resumed,
+  wakeLocked,
 }: BrewModalProps) {
   const step = currentStep >= 0 ? steps[currentStep] : undefined;
   const isTimed = !!step && step.seconds > 0;
   const isLastStep = currentStep === steps.length - 1 && steps.length > 0;
+  const fillPct = isTimed ? fillPercent(secondsLeft, totalSeconds) : 0;
+  const urgent = isTimed && started && !finished && secondsLeft <= 10;
+  const zh = narration.lang === "zh";
+  const text = step ? (zh ? zhStep(step) : { label: step.label, sub: step.sub }) : undefined;
 
-  // Countdown panel content
-  let countdownVisible = false;
-  let stepLabel = "—";
-  let timeLabel = "—";
-  let urgent = false;
-  let fillPct = 0;
-  let doneMsgVisible = false;
-
+  // What the scene shows, and the one sentence that says what to do about it.
+  let mode: BrewSceneMode = "warm";
+  let cue = text?.sub ?? "";
   if (step) {
-    if (isTimed) {
-      countdownVisible = true;
-      stepLabel = step.label.toUpperCase();
-      timeLabel = countdownDisplay(secondsLeft);
-      urgent = started && secondsLeft <= 10;
-      fillPct = fillPercent(secondsLeft, totalSeconds);
-    } else if (isLastStep) {
-      countdownVisible = true;
-      stepLabel = "✦";
-      timeLabel = "🍵";
-      fillPct = 100;
-      doneMsgVisible = true;
+    if (step.kind === "warm") mode = "warm";
+    else if (step.kind === "measure") mode = "measure";
+    else if (step.kind === "pour") mode = "serve";
+    else if (finished) mode = "pour-out";
+    else if (started) mode = "wait";
+    else mode = "pour-in";
+
+    const isRinse = step.kind === "rinse";
+    if (mode === "pour-in") {
+      cue = zh
+        ? ZH_UI.poured(isRinse)
+        : isRinse
+          ? "Pour hot water over the bag, then tap Start."
+          : "Pour hot water in and put the lid on, then tap Start.";
+    } else if (mode === "wait") {
+      cue = zh
+        ? paused
+          ? ZH_UI.paused
+          : ZH_UI.waiting
+        : paused
+          ? "Paused. Tap Resume when you're ready."
+          : "Lid on. Just breathe and wait.";
+    } else if (mode === "pour-out") {
+      cue = zh
+        ? ZH_UI.done(isRinse)
+        : isRinse
+          ? "Time's up. Pour it out. Don't drink this one."
+          : "Time's up. Pour it into your cup, then drink.";
     }
   }
 
-  // Main (pause/resume/start) button
-  let mainBtnVisible = false;
-  let mainBtnText = "";
-  let mainBtnClass = "";
-  let mainBtnOnClick = onPauseResume;
-  if (isTimed && !finished) {
-    mainBtnVisible = true;
-    if (!started) {
-      mainBtnText = "▶ Start timer";
-      mainBtnClass = "start-ready";
-      mainBtnOnClick = onStart;
-    } else {
-      mainBtnText = paused ? "▶ Resume" : "⏸ Pause";
-      mainBtnClass = paused ? "paused" : "";
-      mainBtnOnClick = onPauseResume;
-    }
-  }
+  // Speak the step when it starts, and again the moment the clock runs out —
+  // that's the one instruction the drinker can't afford to miss.
+  const { speak } = narration;
+  useEffect(() => {
+    if (!open || !step) return;
+    speak(zh ? `${zhStep(step).label}。${zhStep(step).sub}` : `${step.label}. ${step.sub}`);
+  }, [open, step, speak, zh]);
+  useEffect(() => {
+    if (!open || !step || !finished || !isTimed) return;
+    const rinse = step.kind === "rinse";
+    speak(
+      zh
+        ? ZH_UI.done(rinse)
+        : rinse
+          ? "Time's up. Pour it out."
+          : "Time's up. Pour it into your cup, then drink."
+    );
+  }, [open, step, finished, isTimed, speak, zh]);
 
-  // Next / Skip button
   const nextDisabled = isLastStep;
-  let nextText = "Skip →";
-  let nextReady = false;
-  if (!isTimed && step && !isLastStep) {
-    nextText = "Continue →";
-    nextReady = true;
-  } else if (isTimed && finished) {
-    nextText = "Ready for next step →";
-    nextReady = true;
-  }
+  const nextReady = (!isTimed && !!step && !isLastStep) || (isTimed && finished);
+  const nextText = isTimed && !finished ? (zh ? ZH_UI.skip : "Skip") : zh ? ZH_UI.next : "Next step";
 
   return (
     <div className={`brew-overlay${open ? " open" : ""}`} id="brewOverlay">
@@ -117,121 +135,193 @@ function BrewModal({
           <span className="brew-modal-title" id="brewModalTitle">
             {title}
           </span>
-          <button className="brew-modal-close" onClick={onClose}>
-            ✕
-          </button>
+          <div className="brew-modal-header-actions">
+            <button
+              type="button"
+              className="brew-modal-lang-btn"
+              onClick={narration.toggleLang}
+              aria-label={zh ? "Switch to English" : "切换到中文"}
+              title={zh ? "Switch to English" : "切换到中文"}
+              lang={zh ? "en" : "zh"}
+            >
+              {zh ? "EN" : "中文"}
+            </button>
+            <button
+              type="button"
+              className="brew-modal-icon-btn"
+              onClick={narration.toggleMute}
+              aria-pressed={narration.muted}
+              aria-label={narration.muted ? "Unmute narration" : "Mute narration"}
+              title={narration.muted ? "Unmute narration" : "Mute narration"}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" {...ICON}>
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                {narration.muted ? (
+                  <>
+                    <line x1="23" y1="9" x2="17" y2="15" />
+                    <line x1="17" y1="9" x2="23" y2="15" />
+                  </>
+                ) : (
+                  <>
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                  </>
+                )}
+              </svg>
+            </button>
+            <button type="button" className="brew-modal-icon-btn" onClick={onClose} aria-label="Close">
+              <svg width="16" height="16" viewBox="0 0 24 24" {...ICON}>
+                <line x1="5" y1="5" x2="19" y2="19" />
+                <line x1="19" y1="5" x2="5" y2="19" />
+              </svg>
+            </button>
+          </div>
         </div>
 
-        <div
-          // Remount (and so replay the settle-in) only when the step itself
-          // changes, never on the once-a-second countdown tick.
-          key={currentStep}
-          className="brew-modal-countdown"
-          id="brewModalCountdown"
-          style={{ display: countdownVisible ? "flex" : "none" }}
-        >
-          <div className="brew-modal-step-label" id="brewModalStepLabel">
-            {stepLabel}
-          </div>
-          <div className="brew-modal-time-row">
-            {isTimed && (
-              <BrewCup
-                fillPct={fillPct}
+        {resumed && (
+          <p className="brew-modal-note" role="status">
+            {zh ? ZH_UI.welcomeBack : "Welcome back — your brew kept its place."}
+          </p>
+        )}
+
+        <div className="brew-stage">
+          <div className="brew-scene">
+            {step && (
+              <BrewScene
+                // A fresh scene per step and phase, so its loop always starts
+                // from the first frame of the action being asked for.
+                key={`${currentStep}-${mode}`}
+                mode={mode}
                 theme={liquorTheme}
-                steaming={started && !paused && !finished}
-                urgent={urgent}
+                fillPct={fillPct}
+                outIsTea={step.kind === "steep"}
               />
             )}
-            <div
-              className={`brew-modal-time${urgent ? " urgent" : ""}`}
-              id="brewModalTime"
-            >
-              {timeLabel}
+          </div>
+
+          {step && (
+            <div className="brew-cue" key={`${currentStep}-${mode}`} aria-live="polite">
+              <div className="brew-cue-title">
+                {text?.label}
+                <span
+                  className={`brew-cue-speaking${narration.guideSpeaking ? " on" : ""}`}
+                  aria-hidden="true"
+                />
+              </div>
+              <p className="brew-cue-line">{isLastStep
+                  ? zh
+                    ? ZH_UI.last
+                    : "Your tea is ready. Pour gently and savour."
+                  : cue}</p>
+              {narration.problem && !narration.muted && (
+                <p className="brew-cue-problem" role="status">
+                  {zh ? ZH_UI.voiceOff : "Voice is off: "}
+                  {narration.problem}
+                </p>
+              )}
             </div>
-          </div>
-          <div className="brew-modal-progress">
-            <div
-              className="brew-modal-progress-fill"
-              id="brewModalFill"
-              style={{ transform: `scaleX(${fillPct / 100})` }}
-            />
-          </div>
-          <div
-            className={`brew-modal-done-msg${doneMsgVisible ? " visible" : ""}`}
-            id="brewModalDone"
-          >
-            Your tea is ready. Pour gently and savour. 🍵
-          </div>
-        </div>
+          )}
 
-        {mainBtnVisible && (
-          <button
-            className={`brew-modal-main-btn${mainBtnClass ? ` ${mainBtnClass}` : ""}`}
-            id="brewMainBtn"
-            onClick={mainBtnOnClick}
-          >
-            {mainBtnText}
-          </button>
-        )}
+          {isTimed && (
+            <div className="brew-clock">
+              <div className={`brew-clock-time${urgent ? " urgent" : ""}`} id="brewModalTime">
+                {countdownDisplay(secondsLeft)}
+              </div>
+              <div className="brew-clock-bar">
+                <div
+                  className="brew-clock-fill"
+                  id="brewModalFill"
+                  style={{ transform: `scaleX(${fillPct / 100})` }}
+                />
+              </div>
+            </div>
+          )}
 
-        {/* Only while there's an actual countdown running (a rinse or a
-            steep) — that's real dead time, unlike the untimed "measure your
-            leaves" or "pour & enjoy" steps, which are hands-on rather than
-            waiting. Picking one sends it to chat and hands off to the
-            floating mini-timer so the countdown keeps going underneath. */}
-        {isTimed && (
-          <div className="brew-modal-steep-prompts">
-            <span className="brew-modal-steep-prompts-label">While you steep, ask me</span>
-            <div className="brew-modal-steep-prompts-row">
-              {steepPrompts.map((sp) => (
-                <button className="qp-btn" key={sp.text} onClick={() => onSteepPrompt(sp.text)}>
-                  <span aria-hidden="true">{sp.icon}</span>
-                  <span>{sp.label}</span>
+          <div className="brew-controls">
+            {isTimed && !finished && (
+              <>
+                <button
+                  className={`brew-main-btn${!started ? " start-ready" : ""}${paused ? " paused" : ""}`}
+                  id="brewMainBtn"
+                  onClick={!started ? onStart : onPauseResume}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" {...ICON} aria-hidden="true">
+                    {started && !paused ? (
+                      <>
+                        <line x1="8" y1="5" x2="8" y2="19" />
+                        <line x1="16" y1="5" x2="16" y2="19" />
+                      </>
+                    ) : (
+                      <polygon points="7 4 19 12 7 20 7 4" fill="currentColor" />
+                    )}
+                  </svg>
+                  {!started
+                    ? zh
+                      ? ZH_UI.start
+                      : "Start timer"
+                    : paused
+                      ? zh
+                        ? ZH_UI.resume
+                        : "Resume"
+                      : zh
+                        ? ZH_UI.pause
+                        : "Pause"}
                 </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="brew-modal-nav">
-          <button
-            className="brew-nav-btn"
-            id="brewPrevBtn"
-            onClick={onPrev}
-            disabled={currentStep <= 0}
-          >
-            ← Previous
-          </button>
-          <button
-            className={`brew-nav-btn${nextReady ? " brew-ready-next" : ""}`}
-            id="brewNextBtn"
-            onClick={onNext}
-            disabled={nextDisabled}
-          >
-            {nextText}
-          </button>
-        </div>
-
-        <div className="brew-modal-steps" id="brewSteps">
-          {steps.map((s, i) => (
-            <div
-              key={i}
-              className={`brew-step${i === currentStep ? " active" : ""}${
-                i < currentStep ? " done" : ""
-              }`}
-              id={`brewStep${i}`}
-              onClick={() => onJumpToStep(i)}
+                <button
+                  className="brew-extend-btn"
+                  onClick={onExtend}
+                  disabled={!started}
+                  aria-label={`Extend this steep by ${extendSeconds} seconds`}
+                  title={`Steep ${extendSeconds}s longer`}
+                >
+                  +{extendSeconds}{zh ? "秒" : "s"}
+                </button>
+              </>
+            )}
+            <button
+              className="brew-nav-btn"
+              id="brewPrevBtn"
+              onClick={onPrev}
+              disabled={currentStep <= 0}
+              aria-label="Previous step"
             >
-              <div className="brew-step-num">{i + 1}</div>
-              <div className="brew-step-info">
-                <div className="brew-step-label">{s.label}</div>
-                {s.sub && <div className="brew-step-sub">{s.sub}</div>}
-              </div>
-              <div className="brew-step-dur">
-                {s.seconds > 0 ? formatBrewTime(s.seconds) : ""}
-              </div>
-            </div>
-          ))}
+              <svg width="16" height="16" viewBox="0 0 24 24" {...ICON} aria-hidden="true">
+                <polyline points="15 5 8 12 15 19" />
+              </svg>
+            </button>
+            <button
+              className={`brew-nav-btn brew-nav-next${nextReady ? " brew-ready-next" : ""}`}
+              id="brewNextBtn"
+              onClick={onNext}
+              disabled={nextDisabled}
+            >
+              {nextText}
+              <svg width="16" height="16" viewBox="0 0 24 24" {...ICON} aria-hidden="true">
+                <polyline points="9 5 16 12 9 19" />
+              </svg>
+            </button>
+          </div>
+
+          {wakeLocked && (
+            <p className="brew-awake">{zh ? ZH_UI.awake : "Screen stays awake while you brew."}</p>
+          )}
+
+          <ol className="brew-rail" id="brewSteps" aria-label="Brew steps">
+            {steps.map((s, i) => (
+              <li key={i}>
+                <button
+                  type="button"
+                  className={`brew-rail-dot${i === currentStep ? " active" : ""}${i < currentStep ? " done" : ""}`}
+                  id={`brewStep${i}`}
+                  onClick={() => onJumpToStep(i)}
+                  aria-current={i === currentStep ? "step" : undefined}
+                  title={`${s.label}${s.seconds > 0 ? ` · ${formatBrewTime(s.seconds)}` : ""}`}
+                >
+                  <span className="sr-only">{zh ? zhStep(s).label : s.label}</span>
+                </button>
+              </li>
+            ))}
+          </ol>
         </div>
       </div>
     </div>
@@ -239,9 +329,9 @@ function BrewModal({
 }
 
 // The brew timer ticks TeaCompanion's state every second the whole session
-// through, including while this modal sits closed behind the mini-timer
+// through, including while this view sits closed behind the mini-timer
 // (visibility: hidden, not unmounted, so it can fade in/out) — without this,
-// every tick still rebuilds the full step list, cup SVG, and nav buttons for
+// every tick still rebuilds the full step list, tray SVG, and nav buttons for
 // a subtree nothing is looking at. Skip that reconcile whenever `open` was
 // false on both the last render and this one; the moment it actually opens
 // (or starts closing), `open` itself differs and a fresh render still fires,
