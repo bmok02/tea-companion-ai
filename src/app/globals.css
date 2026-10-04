@@ -3069,7 +3069,7 @@ body::before {
   background: rgba(8, 6, 4, 0.78);
 }
 /* The light itself: a transparent window whose enormous shadow dims the rest
-   of the page. It never takes clicks, so the control inside stays usable. */
+   of the page. It takes the clicks too, so the lit control is look-only. */
 .tour-hole {
   position: fixed;
   border-radius: 10px;
@@ -3077,7 +3077,8 @@ body::before {
   box-shadow:
     0 0 0 100vmax rgba(8, 6, 4, 0.78),
     0 0 22px rgba(217, 116, 74, 0.45);
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: default;
   transition:
     top 0.35s var(--ease-calm),
     left 0.35s var(--ease-calm),
@@ -3122,22 +3123,63 @@ body::before {
   gap: 10px;
   pointer-events: auto;
 }
-.tour-bar .tour-btn {
-  background: var(--paper-dark);
+/* The one thing to press: bigger than anything else on screen and gently
+   pulsing, so nobody wonders what to do next. */
+.tour-next {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 34px;
+  font-size: 20px;
+  background: var(--gold);
+  border-color: var(--gold-light);
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+  animation: tourPulse 1.8s ease-out infinite;
 }
-.tour-bar .tour-btn-primary {
-  background: var(--gold-deep);
+.tour-next:hover {
+  background: var(--gold-light);
+}
+@keyframes tourPulse {
+  0% {
+    box-shadow:
+      0 8px 22px rgba(0, 0, 0, 0.5),
+      0 0 0 0 rgba(217, 116, 74, 0.7);
+  }
+  70%,
+  100% {
+    box-shadow:
+      0 8px 22px rgba(0, 0, 0, 0.5),
+      0 0 0 16px rgba(217, 116, 74, 0);
+  }
+}
+.tour-card-hint {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--gold-text);
+}
+.tour-card-hint svg {
+  animation: tourNudge 1.2s ease-in-out infinite;
+}
+@keyframes tourNudge {
+  50% {
+    transform: translate(3px, 3px);
+  }
 }
 
-/* While touring, lift the corner dock so the Skip / Next bar owns the very
+/* While touring, lift the corner dock so the Next button owns the very
    corner without covering the Guide | Chat switch it's about to introduce. */
 body[data-tour="on"] .dock {
-  bottom: 76px;
+  bottom: 92px;
 }
 @media (max-width: 560px) {
   body[data-tour="on"] .dock {
-    bottom: 64px;
+    bottom: 84px;
   }
 }
 
@@ -3159,5 +3201,9 @@ body[data-tour="on"] .dock {
 @media (prefers-reduced-motion: reduce) {
   .tour-hole {
     transition-duration: 0.001s;
+  }
+  .tour-next,
+  .tour-card-hint svg {
+    animation: none;
   }
 }

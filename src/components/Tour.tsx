@@ -3,8 +3,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 // First-visit onboarding: a welcome question, then a spotlight tour. The page
-// is dimmed everywhere except the one control being introduced, which stays
-// live — tapping it does the real thing — while Skip / Next sit bottom-right.
+// is dimmed everywhere except the one control being introduced, which is shown
+// but not tappable: the only way forward is the Next button, bottom-right.
 
 export interface TourStep {
   // CSS selector of the element to light up.
@@ -17,12 +17,12 @@ export const TOUR_STEPS: TourStep[] = [
   {
     target: ".tea-selector",
     title: "Choose your tea",
-    body: "Search Tea Chapter’s catalogue and pick what you’re brewing. Try it now, or press Next and we’ll pick one for you.",
+    body: "Search Tea Chapter’s catalogue and pick what you’re brewing. For this walk-through we’ll choose one for you.",
   },
   {
     target: "#brewNowBtn",
     title: "Begin your brew",
-    body: "This opens the guided ritual. Tap it, or press Next.",
+    body: "This opens the guided ritual. We’ll open it for you.",
   },
   {
     target: ".brew-cue",
@@ -32,7 +32,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     target: "#brewNextBtn",
     title: "Move on when you’re ready",
-    body: "Tap Next step to continue. On a timed step it becomes Skip, in case you’d rather not wait.",
+    body: "This moves you on to the following step. On a timed step it becomes Skip, in case you’d rather not wait.",
   },
   {
     target: ".brew-modal-header-actions",
@@ -42,7 +42,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     target: ".dock-switch",
     title: "Guide or Chat",
-    body: "Chat is one tap away and never hides your timer. Tap Chat now, or press Next.",
+    body: "Chat is one tap away and never hides your timer. We’ll open it for you.",
   },
   {
     target: ".dock-panel .input-area",
@@ -107,7 +107,7 @@ interface Box {
 
 const PAD = 8; // breathing room around the lit element
 const GAP = 14; // between the lit element and the card
-const BAR_RESERVE = 84; // keep the card clear of the bottom-right Skip/Next bar
+const BAR_RESERVE = 96; // keep the card clear of the bottom-right Next button
 const CARD_W = 340;
 
 function sameBox(a: Box | null, b: Box | null) {
@@ -126,13 +126,11 @@ export function TourSpotlight({
   index,
   total,
   onNext,
-  onSkip,
 }: {
   step: TourStep;
   index: number;
   total: number;
   onNext: () => void;
-  onSkip: () => void;
 }) {
   const [box, setBox] = useState<Box | null>(null);
   const [cardH, setCardH] = useState(180);
@@ -183,13 +181,24 @@ export function TourSpotlight({
     if (h) setCardH(h);
   }, [index, vp.w, vp.h]);
 
+  // Keep the page itself out of reach: the lit control is for looking at, and
+  // Next is the only thing that can be pressed. Clicks are caught by the panes
+  // below; this covers the keyboard (Tab / Enter / Space on a page control).
+  const nextRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
+    nextRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onSkip();
+      const inTour = (e.target as Element | null)?.closest?.(".tour-root");
+      if (inTour) return;
+      if (e.key === "Enter" || e.key === " " || e.key === "Tab") {
+        e.preventDefault();
+        e.stopPropagation();
+        nextRef.current?.focus();
+      }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onSkip]);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
 
   const { w: vw, h: vh } = vp;
   const cardW = Math.min(CARD_W, Math.max(0, vw - 24));
@@ -259,15 +268,24 @@ export function TourSpotlight({
           </span>
           <h3>{step.title}</h3>
           <p>{step.body}</p>
+          <span className="tour-card-hint">
+            {last ? "Press Done to finish" : "Press Next to continue"}
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="7" y1="7" x2="17" y2="17" />
+              <polyline points="17 8 17 17 8 17" />
+            </svg>
+          </span>
         </div>
       )}
 
       <div className="tour-bar">
-        <button className="tour-btn" onClick={onSkip}>
-          Skip
-        </button>
-        <button className="tour-btn tour-btn-primary" onClick={onNext}>
+        <button ref={nextRef} className="tour-btn tour-btn-primary tour-next" onClick={onNext}>
           {last ? "Done" : "Next"}
+          {!last && (
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="9 5 16 12 9 19" />
+            </svg>
+          )}
         </button>
       </div>
     </div>

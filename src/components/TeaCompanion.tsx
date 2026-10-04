@@ -706,13 +706,13 @@ export default function TeaCompanion() {
 
   // ── First-visit tour ──────────────────────────────────────────────────
   // A welcome question on a first visit; "yes" walks through the real
-  // controls with a spotlight. The tour does what it shows (picks a tea, opens
-  // a brew, opens chat) and puts everything back when it ends.
+  // controls with a spotlight. The controls themselves aren't tappable — only
+  // Next is — and the tour does what it shows (picks a tea, opens a brew,
+  // opens chat), then puts everything back when it ends.
   const [tourPhase, setTourPhase] = useState<"off" | "welcome" | "steps">("off");
   const [tourStep, setTourStep] = useState(0);
   const tourPickedTeaRef = useRef(false);
   const tourOpenedBrewRef = useRef(false);
-  const tourStartTeaRef = useRef("");
 
   function rememberTour() {
     try {
@@ -725,7 +725,6 @@ export default function TeaCompanion() {
   function startTour() {
     tourPickedTeaRef.current = false;
     tourOpenedBrewRef.current = false;
-    tourStartTeaRef.current = currentTea;
     setChatOpen(false);
     setTourStep(0);
     setTourPhase("steps");
@@ -772,15 +771,9 @@ export default function TeaCompanion() {
     setTourStep((s) => (s === cur ? cur + 1 : s));
   }
 
-  // Doing the highlighted thing for real moves the tour along too.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (tourPhase !== "steps") return;
-    const advance = (from: number) => setTourStep((s) => (s === from ? from + 1 : s));
-    if (tourStep === 0 && currentTea && currentTea !== tourStartTeaRef.current) advance(0);
-    if (tourStep === 1 && modalOpen) advance(1);
-    if (tourStep === 5 && chatOpen) advance(5);
-    if (tourStep >= 2) tourOpenedBrewRef.current = true;
+    if (tourPhase === "steps" && tourStep >= 2) tourOpenedBrewRef.current = true;
   });
 
   // Ask on a first visit — but not of someone resumed mid-brew, who plainly
@@ -1116,7 +1109,6 @@ export default function TeaCompanion() {
           index={tourStep}
           total={TOUR_STEPS.length}
           onNext={tourNext}
-          onSkip={finishTour}
         />
       )}
     </div>
