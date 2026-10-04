@@ -6,12 +6,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-// Default: "Lily — Velvety Actress", a calm premade voice that works on
-// ElevenLabs' free tier. The Singaporean "iHoo — Calm, Warm & Friendly" voice
-// (2OnsxUxIkaYycmpSRm1E) matches the real teahouse better but is a library
-// voice, which the API only allows on a paid plan (Creator+) — set
-// ELEVENLABS_VOICE_ID to it after upgrading.
-const DEFAULT_VOICE_ID = "pFZP5JQG7iQjIQuC4Bku";
+// Default: "Gabriel — Calm and Peaceful Narrator", a Singaporean library voice.
+// The API only lets paid plans (Creator+) use library voices; on the free tier
+// set ELEVENLABS_VOICE_ID to a premade voice such as "Lily"
+// (pFZP5JQG7iQjIQuC4Bku) instead.
+const DEFAULT_VOICE_ID = "sla02gCKN0hNfNn9ORJN";
 
 interface NarrateRequestBody {
   text?: string;

@@ -31,7 +31,7 @@ import ChatDock from "./ChatDock";
 // specifically during a step's countdown, where there's real dead time to
 // fill instead of competing with the "start brewing" call to action.
 const STEEP_PROMPTS = [
-  { label: "Mindful session", text: "Guide me through a mindful tea session" },
+  { label: "Mindfulness question", text: "Ask me a mindfulness question" },
   { label: "History & origins", text: "Tell me the history and origins of this tea" },
   { label: "Fun fact", text: "Share a fun fact or story about this tea" },
   { label: "Health benefits", text: "What are the health benefits of this tea?" },
@@ -351,6 +351,10 @@ export default function TeaCompanion() {
     const text = (overrideText ?? inputValue).trim();
     if (!text) return;
 
+    // Sending is a tap, which unlocks the reply voice's audio element — and
+    // anything chat was still saying stops for the new question.
+    narration.prime();
+    narration.cancelReply();
     setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: "user", text }]);
     setInputValue("");
 
@@ -431,6 +435,8 @@ export default function TeaCompanion() {
             const text = streamedText;
             setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, text } : m)));
           }
+          // Speak sentences as they complete, without waiting for the rest.
+          narration.feedReply(streamedText);
         }
       }
 
@@ -441,13 +447,14 @@ export default function TeaCompanion() {
         ...historyRef.current,
         { role: "assistant", content: streamedText || "(No response)" },
       ];
-      // Read the finished reply aloud in the companion's voice.
-      if (streamedText) narration.speakReply(streamedText);
+      // Flush the last sentence(s) to the companion's voice.
+      if (streamedText) narration.endReply(streamedText);
     } catch (err) {
       const message = `Something went wrong: ${err instanceof Error ? err.message : "unknown error"}. Please try again.`;
       if (assistantId) {
         // A partial reply already streamed in — note the interruption
         // instead of discarding what the drinker already has.
+        narration.endReply(streamedText);
         const id = assistantId;
         setMessages((prev) =>
           prev.map((m) => (m.id === id ? { ...m, text: `${m.text}\n\n_(connection interrupted)_` } : m))

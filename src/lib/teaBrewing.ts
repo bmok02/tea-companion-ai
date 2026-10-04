@@ -6,12 +6,15 @@ import { KNOWLEDGE_BASE, Tea } from "./knowledgeBase";
 export function findTea(name: string): Tea | null {
   if (!name) return null;
   const q = name.toLowerCase();
+  const teas = KNOWLEDGE_BASE.teas;
+  // Exact name first: the looser first-word fallback below would otherwise
+  // let an earlier entry sharing a first word ("Jin Jun Mei") shadow
+  // "Jin Xuan".
   return (
-    KNOWLEDGE_BASE.teas.find(
-      (t) =>
-        t.name.toLowerCase().includes(q) ||
-        q.includes(t.name.toLowerCase().split(" ")[0].toLowerCase())
-    ) || null
+    teas.find((t) => t.name.toLowerCase() === q) ||
+    teas.find((t) => t.name.toLowerCase().includes(q)) ||
+    teas.find((t) => q.includes(t.name.toLowerCase().split(" ")[0])) ||
+    null
   );
 }
 
@@ -60,6 +63,8 @@ ${biz}
 BREWING FORMAT: Be specific — temperatures, quantities, steeping times, re-steep count. Keep it sequential and practical.
 
 MINDFULNESS: Guide attention to sensory details (colour, aroma, warmth, taste). Offer reflective questions. Keep grounded, not spiritual jargon.
+
+MINDFULNESS QUESTION: When asked for a mindfulness question, reply with only a two-part question and nothing else: no greeting, no explanation, no follow-up offer. The two parts should flow into one another and invite the people sharing the table to each share a few things aloud (what they notice in the cup, what the moment brings up). Keep it short enough to be read aloud in one breath or two.
 
 CITATION: Reference Tea Chapter naturally when drawing from their catalogue (e.g. "Tea Chapter notes…").
 
