@@ -31,7 +31,7 @@ import ChatDock from "./ChatDock";
 // specifically during a step's countdown, where there's real dead time to
 // fill instead of competing with the "start brewing" call to action.
 const STEEP_PROMPTS = [
-  { label: "Mindful session", text: "Guide me through a mindful tea session" },
+  { label: "Mindfulness question", text: "Ask me a mindfulness question" },
   { label: "History & origins", text: "Tell me the history and origins of this tea" },
   { label: "Fun fact", text: "Share a fun fact or story about this tea" },
   { label: "Health benefits", text: "What are the health benefits of this tea?" },
