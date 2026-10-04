@@ -6,12 +6,15 @@ import { KNOWLEDGE_BASE, Tea } from "./knowledgeBase";
 export function findTea(name: string): Tea | null {
   if (!name) return null;
   const q = name.toLowerCase();
+  const teas = KNOWLEDGE_BASE.teas;
+  // Exact name first: the looser first-word fallback below would otherwise
+  // let an earlier entry sharing a first word ("Jin Jun Mei") shadow
+  // "Jin Xuan".
   return (
-    KNOWLEDGE_BASE.teas.find(
-      (t) =>
-        t.name.toLowerCase().includes(q) ||
-        q.includes(t.name.toLowerCase().split(" ")[0].toLowerCase())
-    ) || null
+    teas.find((t) => t.name.toLowerCase() === q) ||
+    teas.find((t) => t.name.toLowerCase().includes(q)) ||
+    teas.find((t) => q.includes(t.name.toLowerCase().split(" ")[0])) ||
+    null
   );
 }
 
