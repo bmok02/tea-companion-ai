@@ -70,6 +70,11 @@ export function useNarration() {
   // chat is talking, so it's waiting for its turn.
   const guideHeldRef = useRef(false);
   const replyActiveRef = useRef(false);
+  // The current reply has been fully handed to the voice (finished, or cut at
+  // the length cap). Later stream updates for it are ignored rather than
+  // starting a fresh session that re-reads it from the top; the next question
+  // (cancelReply) re-opens this.
+  const replyClosedRef = useRef(false);
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -283,6 +288,7 @@ export function useNarration() {
       audio.pause();
     }
     replyActiveRef.current = false;
+    replyClosedRef.current = false;
     setReplySpeaking(false);
     if (resume) resumeGuide();
   }, []);
@@ -293,8 +299,9 @@ export function useNarration() {
   // step language is.
   function feed(text: string, final: boolean, force: boolean) {
     if (replyMutedRef.current && !force) return;
+    if (replyClosedRef.current) return;
     let session = sessionRef.current;
-    if (!session || session.ended) {
+    if (!session) {
       if (!text.trim()) return;
       session = {
         consumed: 0,
@@ -330,6 +337,7 @@ export function useNarration() {
       min = CHUNK_MIN;
     }
     if (last) {
+      replyClosedRef.current = true;
       const tail = view.slice(from).trim();
       if (tail) session.pending.push(tail);
       from = view.length;
