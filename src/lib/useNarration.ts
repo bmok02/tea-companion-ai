@@ -366,6 +366,14 @@ export function useNarration() {
     [cancelReply]
   );
 
+  // Silence the guide and forget what it last said (so the same step can be
+  // spoken again later) — used when the tour tears down its demo brew.
+  const stopGuide = useCallback(() => {
+    audioRef.current?.pause();
+    guideHeldRef.current = false;
+    currentTextRef.current = null;
+  }, []);
+
   const toggleLang = useCallback(() => {
     const next: Lang = langRef.current === "zh" ? "en" : "zh";
     langRef.current = next;
@@ -433,6 +441,7 @@ export function useNarration() {
     feedReply,
     endReply,
     cancelReply,
+    stopGuide,
     speakReply,
     replay,
     toggleMute,

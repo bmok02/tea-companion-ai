@@ -2971,3 +2971,193 @@ body::before {
     width: 200px;
   }
 }
+
+/* ── First-visit tour (Tour.tsx) ──
+   A welcome question, then a spotlight walk-through: everything dims except
+   the one control being introduced, with Skip / Next bottom-right. */
+.tour-welcome-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(8, 6, 4, 0.78);
+  animation: settleIn 0.4s var(--ease-calm) both;
+}
+.tour-welcome {
+  width: 100%;
+  max-width: 420px;
+  padding: 32px 28px 26px;
+  text-align: center;
+  background: var(--paper-dark);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+.tour-welcome-mark {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 30px;
+  color: var(--gold-light);
+}
+.tour-welcome h2 {
+  margin-bottom: 8px;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 26px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.tour-welcome p {
+  margin-bottom: 22px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-faint);
+}
+.tour-welcome-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tour-btn {
+  padding: 10px 22px;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 16px;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition:
+    background 0.2s var(--ease-calm),
+    color 0.2s var(--ease-calm),
+    transform 0.2s var(--ease-calm);
+}
+.tour-btn:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.06);
+}
+.tour-btn:focus-visible {
+  outline: 2px solid var(--gold-light);
+  outline-offset: 2px;
+}
+.tour-btn-primary {
+  color: white;
+  background: var(--gold-deep);
+  border-color: var(--gold-deep);
+}
+.tour-btn-primary:hover {
+  color: white;
+  background: var(--gold);
+}
+
+.tour-root {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  pointer-events: none;
+}
+.tour-block {
+  position: fixed;
+  pointer-events: auto;
+}
+.tour-block-full {
+  inset: 0;
+  background: rgba(8, 6, 4, 0.78);
+}
+/* The light itself: a transparent window whose enormous shadow dims the rest
+   of the page. It never takes clicks, so the control inside stays usable. */
+.tour-hole {
+  position: fixed;
+  border-radius: 10px;
+  border: 2px solid var(--gold-light);
+  box-shadow:
+    0 0 0 100vmax rgba(8, 6, 4, 0.78),
+    0 0 22px rgba(217, 116, 74, 0.45);
+  pointer-events: none;
+  transition:
+    top 0.35s var(--ease-calm),
+    left 0.35s var(--ease-calm),
+    width 0.35s var(--ease-calm),
+    height 0.35s var(--ease-calm);
+}
+.tour-card {
+  position: fixed;
+  padding: 16px 18px 18px;
+  pointer-events: auto;
+  background: var(--paper-dark);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55);
+  animation: settleIn 0.35s var(--ease-calm) both;
+}
+.tour-card-count {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold-text);
+}
+.tour-card h3 {
+  margin-bottom: 6px;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.tour-card p {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-faint);
+}
+.tour-bar {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  gap: 10px;
+  pointer-events: auto;
+}
+.tour-bar .tour-btn {
+  background: var(--paper-dark);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
+}
+.tour-bar .tour-btn-primary {
+  background: var(--gold-deep);
+}
+
+/* While touring, lift the corner dock so the Skip / Next bar owns the very
+   corner without covering the Guide | Chat switch it's about to introduce. */
+body[data-tour="on"] .dock {
+  bottom: 76px;
+}
+@media (max-width: 560px) {
+  body[data-tour="on"] .dock {
+    bottom: 64px;
+  }
+}
+
+.tour-replay {
+  font-family: inherit;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--ink-muted);
+  background: none;
+  border: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.tour-replay:hover {
+  color: var(--ink-faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-hole {
+    transition-duration: 0.001s;
+  }
+}

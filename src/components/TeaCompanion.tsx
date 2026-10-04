@@ -22,6 +22,7 @@ import { ChatApiMessage, UiMessage } from "@/lib/types";
 import TeaProfileChart from "./TeaProfileChart";
 import TrayScene from "./TrayScene";
 import ChatDock from "./ChatDock";
+import { TOUR_STEPS, TourSpotlight, TourWelcome } from "./Tour";
 
 // "How to brew" used to live here too, but it was pure overlap: asking the
 // chat companion for brewing steps just produced a worse copy of the
@@ -41,6 +42,8 @@ const STEEP_PROMPTS = [
 // are kept here, and the steps themselves are rebuilt from the tea. Old sessions are dropped — a cup
 // abandoned last night shouldn't greet you this morning.
 const BREW_STORAGE_KEY = "teaCompanion.brew.v1";
+// Set once the first-visit question has been answered (either way).
+const TOUR_STORAGE_KEY = "teaCompanion.tour.v1";
 const BREW_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 const EXTEND_SECONDS = 10;
 
@@ -701,6 +704,107 @@ export default function TeaCompanion() {
   const miniSteaming = miniIsTimed && started && !paused && !finished;
   const miniUrgent = miniIsTimed && started && secondsLeft <= 10;
 
+  // ── First-visit tour ──────────────────────────────────────────────────
+  // A welcome question on a first visit; "yes" walks through the real
+  // controls with a spotlight. The tour does what it shows (picks a tea, opens
+  // a brew, opens chat) and puts everything back when it ends.
+  const [tourPhase, setTourPhase] = useState<"off" | "welcome" | "steps">("off");
+  const [tourStep, setTourStep] = useState(0);
+  const tourPickedTeaRef = useRef(false);
+  const tourOpenedBrewRef = useRef(false);
+  const tourStartTeaRef = useRef("");
+
+  function rememberTour() {
+    try {
+      localStorage.setItem(TOUR_STORAGE_KEY, "1");
+    } catch {
+      // Private mode — the question may simply come back next visit.
+    }
+  }
+
+  function startTour() {
+    tourPickedTeaRef.current = false;
+    tourOpenedBrewRef.current = false;
+    tourStartTeaRef.current = currentTea;
+    setChatOpen(false);
+    setTourStep(0);
+    setTourPhase("steps");
+  }
+
+  function answerWelcome(firstTime: boolean) {
+    rememberTour();
+    if (firstTime) startTour();
+    else setTourPhase("off");
+  }
+
+  function finishTour() {
+    rememberTour();
+    setTourPhase("off");
+    setChatOpen(false);
+    if (tourOpenedBrewRef.current) {
+      resetBrew();
+      narration.stopGuide();
+    }
+    if (tourPickedTeaRef.current) {
+      tourPickedTeaRef.current = false;
+      setTeaQuery("");
+      setComboOpen(false);
+      setActiveIndex(-1);
+      commitTeaChange("");
+    }
+  }
+
+  function tourNext() {
+    const cur = tourStep;
+    if (cur >= TOUR_STEPS.length - 1) return finishTour();
+    if (cur === 0 && !currentTea) {
+      const sample =
+        catalogueOptions.find((o) => /tie guan yin/i.test(o.label)) ?? catalogueOptions[0];
+      if (sample) {
+        tourPickedTeaRef.current = true;
+        selectComboOption(sample);
+      }
+    } else if (cur >= 1 && cur <= 3 && !modalOpen) {
+      openBrewModal();
+    } else if (cur === 5 && !chatOpen) {
+      setChatOpen(true);
+    }
+    setTourStep((s) => (s === cur ? cur + 1 : s));
+  }
+
+  // Doing the highlighted thing for real moves the tour along too.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (tourPhase !== "steps") return;
+    const advance = (from: number) => setTourStep((s) => (s === from ? from + 1 : s));
+    if (tourStep === 0 && currentTea && currentTea !== tourStartTeaRef.current) advance(0);
+    if (tourStep === 1 && modalOpen) advance(1);
+    if (tourStep === 5 && chatOpen) advance(5);
+    if (tourStep >= 2) tourOpenedBrewRef.current = true;
+  });
+
+  // Ask on a first visit — but not of someone resumed mid-brew, who plainly
+  // knows their way around.
+  useEffect(() => {
+    if (!hydrated || modalOpen || currentStep >= 0) return;
+    try {
+      if (localStorage.getItem(TOUR_STORAGE_KEY)) return;
+    } catch {
+      return;
+    }
+    setTourPhase("welcome");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  useEffect(() => {
+    if (tourPhase !== "steps") return;
+    document.body.dataset.tour = "on";
+    return () => {
+      delete document.body.dataset.tour;
+    };
+  }, [tourPhase]);
+
   return (
     <div className="app">
       {/* The tray, greeted straight away — no form, no chat, before anything
@@ -870,6 +974,11 @@ export default function TeaCompanion() {
           {!currentTea && (
             <p className="brew-now-hint">Select a tea above to begin</p>
           )}
+          {!miniActive && tourPhase === "off" && (
+            <button type="button" className="tour-replay" onClick={startTour}>
+              New here? Take the tour
+            </button>
+          )}
         </div>
       </div>
 
@@ -1000,6 +1109,16 @@ export default function TeaCompanion() {
           </div>
         </div>
       </ChatDock>
+      {tourPhase === "welcome" && <TourWelcome onAnswer={answerWelcome} />}
+      {tourPhase === "steps" && (
+        <TourSpotlight
+          step={TOUR_STEPS[tourStep]}
+          index={tourStep}
+          total={TOUR_STEPS.length}
+          onNext={tourNext}
+          onSkip={finishTour}
+        />
+      )}
     </div>
   );
 }
