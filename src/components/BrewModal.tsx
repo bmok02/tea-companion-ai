@@ -5,7 +5,10 @@ import { BrewStep, countdownDisplay, fillPercent, formatBrewTime } from "@/lib/t
 import { LiquorTheme } from "@/lib/teaVisuals";
 import { useNarration } from "@/lib/useNarration";
 import { ZH_UI, zhStep } from "@/lib/brewZh";
+import { TEA_SETS, TeaSetId, TeawareItem, ingredientItem } from "@/lib/teaware";
+import { BrewContext, timedCue } from "@/lib/brewCues";
 import BrewScene, { BrewSceneMode } from "./BrewScene";
+import TeawareIconArt from "./TeawareIcon";
 
 interface BrewModalProps {
   open: boolean;
@@ -18,6 +21,8 @@ interface BrewModalProps {
   paused: boolean;
   finished: boolean;
   liquorTheme: LiquorTheme;
+  brewCtx: BrewContext;
+  onChangeEquipment: (next: { set?: TeaSetId; bag?: boolean }) => void;
   narration: ReturnType<typeof useNarration>;
   onClose: () => void;
   onStart: () => void;
@@ -50,6 +55,8 @@ function BrewModal({
   paused,
   finished,
   liquorTheme,
+  brewCtx,
+  onChangeEquipment,
   narration,
   onClose,
   onStart,
@@ -68,7 +75,7 @@ function BrewModal({
   const fillPct = isTimed ? fillPercent(secondsLeft, totalSeconds) : 0;
   const urgent = isTimed && started && !finished && secondsLeft <= 10;
   const zh = narration.lang === "zh";
-  const text = step ? (zh ? zhStep(step) : { label: step.label, sub: step.sub }) : undefined;
+  const text = step ? (zh ? zhStep(step, brewCtx) : { label: step.label, sub: step.sub }) : undefined;
 
   // What the scene shows, and the one sentence that says what to do about it.
   let mode: BrewSceneMode = "warm";
@@ -82,27 +89,10 @@ function BrewModal({
     else mode = "pour-in";
 
     const isRinse = step.kind === "rinse";
-    if (mode === "pour-in") {
-      cue = zh
-        ? ZH_UI.poured(isRinse)
-        : isRinse
-          ? "Pour hot water over the bag, then tap Start."
-          : "Pour hot water in and put the lid on, then tap Start.";
-    } else if (mode === "wait") {
-      cue = zh
-        ? paused
-          ? ZH_UI.paused
-          : ZH_UI.waiting
-        : paused
-          ? "Paused. Tap Resume when you're ready."
-          : "Lid on. Just breathe and wait.";
-    } else if (mode === "pour-out") {
-      cue = zh
-        ? ZH_UI.done(isRinse)
-        : isRinse
-          ? "Time's up. Pour it out. Don't drink this one."
-          : "Time's up. Pour it into your cup, then drink.";
-    }
+    const lang = zh ? "zh" : "en";
+    if (mode === "pour-in") cue = timedCue("pour-in", isRinse, brewCtx, lang);
+    else if (mode === "wait") cue = timedCue(paused ? "paused" : "wait", isRinse, brewCtx, lang);
+    else if (mode === "pour-out") cue = timedCue("done", isRinse, brewCtx, lang);
   }
 
   // Speak the step when it starts, and again the moment the clock runs out —
@@ -110,19 +100,21 @@ function BrewModal({
   const { speak } = narration;
   useEffect(() => {
     if (!open || !step) return;
-    speak(zh ? `${zhStep(step).label}。${zhStep(step).sub}` : `${step.label}. ${step.sub}`);
+    const t = zhStep(step, brewCtx);
+    speak(zh ? `${t.label}。${t.sub}` : `${step.label}. ${step.sub}`);
+    // brewCtx is read for the Chinese wording only; the step object itself
+    // is rebuilt whenever the equipment changes, which re-fires this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, step, speak, zh]);
   useEffect(() => {
     if (!open || !step || !finished || !isTimed) return;
-    const rinse = step.kind === "rinse";
-    speak(
-      zh
-        ? ZH_UI.done(rinse)
-        : rinse
-          ? "Time's up. Pour it out."
-          : "Time's up. Pour it into your cup, then drink."
-    );
+    speak(timedCue("done", step.kind === "rinse", brewCtx, zh ? "zh" : "en"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, step, finished, isTimed, speak, zh]);
+
+  const isPrep = step?.kind === "prep";
+  const { set: teaSet, bag } = brewCtx;
+  const prepItems: TeawareItem[] = [ingredientItem(bag, brewCtx.grams), ...teaSet.items];
 
   const nextDisabled = isLastStep;
   const nextReady = (!isTimed && !!step && !isLastStep) || (isTimed && finished);
@@ -186,7 +178,7 @@ function BrewModal({
 
         <div className="brew-stage">
           <div className="brew-scene">
-            {step && (
+            {step && !isPrep && (
               <BrewScene
                 // A fresh scene per step and phase, so its loop always starts
                 // from the first frame of the action being asked for.
@@ -195,11 +187,73 @@ function BrewModal({
                 theme={liquorTheme}
                 fillPct={fillPct}
                 outIsTea={step.kind === "steep"}
+                bag={bag}
+                set={teaSet.id}
               />
             )}
           </div>
 
-          {step && (
+          {isPrep && (
+            <section className="prep" aria-label={zh ? "开始之前" : "Before you start"}>
+              <fieldset className="prep-q">
+                <legend>{zh ? "您用的是散茶还是茶包？" : "Are you using loose tea or a tea bag?"}</legend>
+                <div className="prep-seg">
+                  {[
+                    { v: false, en: "Loose leaves", zh: "散茶" },
+                    { v: true, en: "Tea bag", zh: "茶包" },
+                  ].map((o) => (
+                    <button
+                      key={String(o.v)}
+                      type="button"
+                      aria-pressed={bag === o.v}
+                      className={`prep-opt${bag === o.v ? " on" : ""}`}
+                      onClick={() => onChangeEquipment({ bag: o.v })}
+                    >
+                      {zh ? o.zh : o.en}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+              <fieldset className="prep-q">
+                <legend>{zh ? "您用哪套茶具？" : "Which tea set are you using?"}</legend>
+                <div className="prep-seg">
+                  {TEA_SETS.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      aria-pressed={s.id === teaSet.id}
+                      className={`prep-opt${s.id === teaSet.id ? " on" : ""}`}
+                      onClick={() => onChangeEquipment({ set: s.id })}
+                    >
+                      {zh ? s.labelZh : s.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="prep-blurb">{zh ? teaSet.blurbZh : teaSet.blurb}</p>
+              </fieldset>
+              <h2 className="prep-title">{zh ? "开始之前，请准备好：" : "Before you start, you should have:"}</h2>
+              <ul className="prep-list">
+                {prepItems.map((it) => (
+                  <li key={it.id} className="prep-item">
+                    <span className="prep-art">
+                      {it.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={it.image} alt="" />
+                      ) : (
+                        <TeawareIconArt icon={it.icon} />
+                      )}
+                    </span>
+                    <span className="prep-text">
+                      <strong>{zh ? it.nameZh : it.name}</strong>
+                      <span>{zh ? it.noteZh : it.note}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {step && !isPrep && (
             <div className="brew-cue" key={`${currentStep}-${mode}`} aria-live="polite">
               <div className="brew-cue-title">
                 {text?.label}
@@ -208,11 +262,7 @@ function BrewModal({
                   aria-hidden="true"
                 />
               </div>
-              <p className="brew-cue-line">{isLastStep
-                  ? zh
-                    ? ZH_UI.last
-                    : "Your tea is ready. Pour gently and savour."
-                  : cue}</p>
+              <p className="brew-cue-line">{cue}</p>
               {narration.problem && !narration.muted && (
                 <p className="brew-cue-problem" role="status">
                   {zh ? ZH_UI.voiceOff : "Voice is off: "}
@@ -317,7 +367,7 @@ function BrewModal({
                   aria-current={i === currentStep ? "step" : undefined}
                   title={`${s.label}${s.seconds > 0 ? ` · ${formatBrewTime(s.seconds)}` : ""}`}
                 >
-                  <span className="sr-only">{zh ? zhStep(s).label : s.label}</span>
+                  <span className="sr-only">{zh ? zhStep(s, brewCtx).label : s.label}</span>
                 </button>
               </li>
             ))}

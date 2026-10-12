@@ -2,6 +2,8 @@
 // KB lookup, system-prompt construction, and the brew-step-timer parser.
 
 import { KNOWLEDGE_BASE, Tea } from "./knowledgeBase";
+import { getTeaSet, leafGrams, TeaSetId } from "./teaware";
+import { BrewContext, stepText } from "./brewCues";
 
 export function findTea(name: string): Tea | null {
   if (!name) return null;
@@ -76,19 +78,26 @@ export interface BrewStep {
   sub: string;
   seconds: number;
   // Each kind drives its own animated scene (see BrewScene.tsx). Timings are
-  // fixed: Tea Chapter's tea bags are pre-portioned, so nothing to tune.
-  kind?: "warm" | "measure" | "rinse" | "steep" | "pour";
+  // fixed, so there is nothing to tune.
+  kind?: "prep" | "warm" | "measure" | "rinse" | "steep" | "pour";
   num?: number;
 }
 
-function steepSub(num: number, secs: number): string {
-  const timeStr = formatBrewTime(secs);
-  return num === 1
-    ? `Pour hot water in, put the lid on, and wait ${timeStr}.`
-    : `Pour hot water in again and wait ${timeStr}. Notice how the flavour shifts.`;
+// What the drinker said they're brewing with, plus what the catalogue says
+// about the tea. Rebuilt whenever either answer changes.
+export function brewContext(
+  tea: Tea | { description: string; name: string } | null,
+  setId: TeaSetId,
+  bag: boolean
+): BrewContext {
+  const instr = tea && "brewing_instructions" in tea ? tea.brewing_instructions : "";
+  return { set: getTeaSet(setId), bag, grams: leafGrams(instr) };
 }
 
-export function parseBrewSteps(tea: Tea | { description: string; name: string }): BrewStep[] | null {
+export function parseBrewSteps(
+  tea: Tea | { description: string; name: string },
+  ctx: BrewContext
+): BrewStep[] | null {
   if (!tea) return null;
   const steps: BrewStep[] = [];
   const src = (
@@ -102,31 +111,16 @@ export function parseBrewSteps(tea: Tea | { description: string; name: string })
     ("category" in tea ? tea.category || "" : "").toLowerCase().includes("green") ||
     src.includes("no rinsing needed");
 
-  // Preheat
-  steps.push({
-    label: "Warm the gaiwan",
-    sub: "Pour in hot water, swirl it around, then pour it out.",
-    seconds: 0,
-    kind: "warm",
+  const step = (kind: NonNullable<BrewStep["kind"]>, seconds = 0): BrewStep => ({
+    ...stepText(kind, ctx, "en"),
+    seconds,
+    kind,
   });
 
-  // Tea bag — Tea Chapter's bags are pre-portioned, so no weighing.
-  steps.push({
-    label: "Add one tea bag",
-    sub: "Drop one tea bag into the gaiwan. It's already the right amount.",
-    seconds: 0,
-    kind: "measure",
-  });
-
-  // Rinse
-  if (hasRinse && !isGreen) {
-    steps.push({
-      label: "Quick rinse",
-      sub: "Pour hot water over the bag, then pour it straight out. Don't drink this one.",
-      seconds: 8,
-      kind: "rinse",
-    });
-  }
+  steps.push(step("prep")); // the checklist: what you're brewing with
+  steps.push(step("warm"));
+  steps.push(step("measure"));
+  if (hasRinse && !isGreen) steps.push(step("rinse", 8));
 
   // Also try the simple "Time — X seconds" format from manually-saved entries
   const simpleTime = src.match(/time[\s—-]+([\d]+)\s*(seconds?|minutes?)/i);
@@ -168,18 +162,10 @@ export function parseBrewSteps(tea: Tea | { description: string; name: string })
   }
 
   for (const { num, secs } of steepTimes) {
-    const ordinal = num === 1 ? "1st" : num === 2 ? "2nd" : num === 3 ? "3rd" : `${num}th`;
-    const label = `${ordinal} steep`;
-    const sub = steepSub(num, secs);
-    steps.push({ label, sub, seconds: secs, kind: "steep", num });
+    steps.push({ ...stepText("steep", ctx, "en", { num, seconds: secs }), seconds: secs, kind: "steep", num });
   }
 
-  steps.push({
-    label: "Pour & enjoy",
-    sub: "Pour into your cups. Breathe in the aroma, then sip slowly.",
-    seconds: 0,
-    kind: "pour",
-  });
+  steps.push(step("pour"));
   return steps;
 }
 

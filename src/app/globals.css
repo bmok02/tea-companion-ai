@@ -2016,6 +2016,22 @@ body::before {
   }
 }
 
+/* Full set: waste water lands on the tray, only while the stream runs */
+.bs-drain {
+  opacity: 0;
+}
+[data-mode="warm"] .bs-drain {
+  animation: bs-out-warm 9s linear infinite;
+}
+[data-mode="pour-out"] .bs-drain {
+  animation: bs-out-pourout 6s linear infinite;
+}
+/* Serve: the other cups have already been filled */
+.bscene .bs-cup-fill-done {
+  animation: none;
+  transform: translateY(5px);
+}
+
 /* Reduced motion: freeze each step on the frame that shows its action */
 @media (prefers-reduced-motion: reduce) {
   .bscene *,
@@ -2052,6 +2068,10 @@ body::before {
   }
   [data-mode="serve"] .bs-cup-fill {
     transform: translateY(6px);
+  }
+  [data-mode="warm"] .bs-drain,
+  [data-mode="pour-out"] .bs-drain {
+    opacity: 1;
   }
   [data-mode="wait"] .bs-steam-gaiwan,
   [data-mode="serve"] .bs-steam-cup {
@@ -3205,5 +3225,119 @@ body[data-tour="on"] .dock {
   .tour-next,
   .tour-card-hint svg {
     animation: none;
+  }
+}
+
+/* ── Before you start: teaware checklist ─────────────────────────────── */
+.prep {
+  padding: 6px 4px 0;
+  animation: stepIn 0.35s var(--ease-calm) both;
+}
+.prep-q {
+  margin: 0 0 14px;
+  padding: 0;
+  border: 0;
+  text-align: center;
+}
+.prep-q legend {
+  width: 100%;
+  padding: 0;
+  font-family: 'IM Fell English', serif;
+  font-size: 20px;
+  line-height: 1.25;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.prep-seg {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.prep-opt {
+  min-height: 44px;
+  min-width: 128px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid var(--gold-deep);
+  background: transparent;
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background-color 0.2s var(--ease-calm), color 0.2s var(--ease-calm);
+}
+.prep-opt.on {
+  background: var(--gold-deep);
+  color: white;
+}
+.prep-opt:focus-visible {
+  outline: 2px solid var(--gold-light);
+  outline-offset: 2px;
+}
+.prep-blurb {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--ink-faint);
+}
+.prep-title {
+  margin: 6px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--gold-deep) 30%, transparent);
+  text-align: center;
+  font-family: 'IM Fell English', serif;
+  font-weight: 400;
+  font-size: 22px;
+  line-height: 1.2;
+  color: var(--ink);
+  text-wrap: balance;
+}
+.prep-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+.prep-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--gold-deep) 30%, transparent);
+  border-radius: 12px;
+}
+.prep-art {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--bamboo) 20%, transparent);
+}
+.prep-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.prep-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--ink-faint);
+}
+.prep-text strong {
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--ink);
+}
+@media (min-width: 560px) {
+  .prep-list {
+    grid-template-columns: 1fr 1fr;
   }
 }

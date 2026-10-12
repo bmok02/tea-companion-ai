@@ -9,10 +9,12 @@ import {
   findTea,
   buildSystemPrompt,
   parseBrewSteps,
+  brewContext,
   countdownDisplay,
   fillPercent,
   BrewStep,
 } from "@/lib/teaBrewing";
+import { DEFAULT_TEA_SET_ID, getTeaSet, isTeabag, TeaSetId } from "@/lib/teaware";
 import { getLiquorTheme, getFlavorProfile } from "@/lib/teaVisuals";
 import { playBeep } from "@/lib/playBeep";
 import { useWakeLock } from "@/lib/useWakeLock";
@@ -41,7 +43,8 @@ const STEEP_PROMPTS = [
 // A brew in progress survives a refresh: the tea and where the timer stood
 // are kept here, and the steps themselves are rebuilt from the tea. Old sessions are dropped — a cup
 // abandoned last night shouldn't greet you this morning.
-const BREW_STORAGE_KEY = "teaCompanion.brew.v1";
+const BREW_STORAGE_KEY = "teaCompanion.brew.v2";
+const TEA_SET_STORAGE_KEY = "teaCompanion.teaSet.v1";
 // Set once the first-visit question has been answered (either way).
 const TOUR_STORAGE_KEY = "teaCompanion.tour.v1";
 const BREW_MAX_AGE_MS = 6 * 60 * 60 * 1000;
@@ -55,6 +58,8 @@ interface SavedBrew {
   started: boolean;
   paused: boolean;
   finished: boolean;
+  bag: boolean;
+  set: TeaSetId;
   savedAt: number;
 }
 
@@ -175,6 +180,15 @@ export default function TeaCompanion() {
   // Tea Chapter's tea bags are pre-portioned, so the catalogue's own timings
   // are the brew — nothing to tune.
   const [brewSteps, setBaseSteps] = useState<BrewStep[]>([]);
+  // The drinker's two answers on the "before you start" step. The set is
+  // remembered between visits; leaves-or-bag defaults from the tea's own
+  // catalogue form each time a new brew opens.
+  const [teaSetId, setTeaSetId] = useState<TeaSetId>(DEFAULT_TEA_SET_ID);
+  const [useBag, setUseBag] = useState(false);
+  const brewCtx = useMemo(
+    () => brewContext(findTea(currentTea), teaSetId, useBag),
+    [currentTea, teaSetId, useBag]
+  );
   const [resumedNote, setResumedNote] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [currentStep, setCurrentStep] = useState(-1); // -1 = not started
@@ -522,13 +536,42 @@ export default function TeaCompanion() {
     }
     if (currentStep === -1) {
       const tea = findTea(currentTea);
-      const parsed = parseBrewSteps(tea || { description: "", name: currentTea });
+      const bag = isTeabag(tea ?? { name: currentTea });
+      setUseBag(bag);
+      const parsed = parseBrewSteps(
+        tea || { description: "", name: currentTea },
+        brewContext(tea, teaSetId, bag)
+      );
       if (!parsed) return;
       setBaseSteps(parsed);
       jumpToStep(0, parsed);
     }
     narration.prime();
     setModalOpen(true);
+  }
+
+  // Changing equipment rebuilds the steps in place; the answers live on the
+  // first (checklist) step, so the drinker stays where they are.
+  function changeEquipment(next: { set?: TeaSetId; bag?: boolean }) {
+    const setId = next.set ?? teaSetId;
+    const bag = next.bag ?? useBag;
+    if (next.set) {
+      setTeaSetId(setId);
+      try {
+        localStorage.setItem(TEA_SET_STORAGE_KEY, setId);
+      } catch {
+        // Not remembered across visits; the choice still applies now.
+      }
+    }
+    if (next.bag !== undefined) setUseBag(bag);
+    if (brewSteps.length > 0) {
+      const tea = findTea(currentTea);
+      const parsed = parseBrewSteps(
+        tea || { description: "", name: currentTea },
+        brewContext(tea, setId, bag)
+      );
+      if (parsed) setBaseSteps(parsed);
+    }
   }
 
   function closeBrewModal() {
@@ -612,10 +655,16 @@ export default function TeaCompanion() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(BREW_STORAGE_KEY);
+      setTeaSetId(getTeaSet(localStorage.getItem(TEA_SET_STORAGE_KEY)).id);
       const saved: SavedBrew | null = raw ? JSON.parse(raw) : null;
       if (saved && Date.now() - saved.savedAt < BREW_MAX_AGE_MS) {
         const tea = findTea(saved.tea);
-        const parsed = parseBrewSteps(tea || { description: "", name: saved.tea });
+        const savedSet = getTeaSet(saved.set).id;
+        const savedBag = saved.bag ?? isTeabag(tea ?? { name: saved.tea });
+        const parsed = parseBrewSteps(
+          tea || { description: "", name: saved.tea },
+          brewContext(tea, savedSet, savedBag)
+        );
         if (parsed && saved.currentStep >= 0 && saved.currentStep < parsed.length) {
           // A running clock kept running while the page was gone.
           const running = saved.started && !saved.paused && !saved.finished;
@@ -628,6 +677,8 @@ export default function TeaCompanion() {
           const option = TEA_OPTIONS.find((o) => o.value === saved.tea);
           if (option) setTeaQuery(option.label);
           else setTeaQuery(saved.tea);
+          setTeaSetId(savedSet);
+          setUseBag(savedBag);
           setBaseSteps(parsed);
           setCurrentStep(saved.currentStep);
           setStarted(saved.started);
@@ -661,6 +712,8 @@ export default function TeaCompanion() {
           started,
           paused,
           finished,
+          bag: useBag,
+          set: teaSetId,
           savedAt: Date.now(),
         };
         localStorage.setItem(BREW_STORAGE_KEY, JSON.stringify(saved));
@@ -678,6 +731,8 @@ export default function TeaCompanion() {
     started,
     paused,
     finished,
+    useBag,
+    teaSetId,
   ]);
 
   // Hold the screen awake for as long as a brew is genuinely in flight
@@ -986,6 +1041,8 @@ export default function TeaCompanion() {
         paused={paused}
         finished={finished}
         liquorTheme={liquorTheme}
+        brewCtx={brewCtx}
+        onChangeEquipment={changeEquipment}
         onClose={closeBrewModal}
         onStart={startBrewTimer}
         onPauseResume={brewPauseResume}
