@@ -1,91 +1,95 @@
 # 茶渊 · The Tea Companion
 
-A mindful brewing companion built for Tea Chapter (9 Neil Road, Chinatown) —
-Singapore's oldest traditional Chinese teahouse, established 1989. The goal
-isn't "a chatbot that knows about tea." It's to slow someone down for the
-few minutes it takes to steep a cup: to turn brewing from a thing you wait
-out into a small ritual you actually notice.
+A guided, spoken tea-brewing companion for **Tea Chapter** (9 Neil Road,
+Chinatown), Singapore's oldest traditional Chinese teahouse, founded in 1989.
 
-## What it's trying to do
+**Live site:** <https://tea-companion-ai.vercel.app/>
 
-Most tea-brewing tools stop at temperature and timing. This one treats the
-steep itself as the point:
+It's for someone brewing Tea Chapter tea at home. The aim is to make the few
+minutes of a steep something you pay attention to instead of something you
+wait through. It isn't a tea encyclopedia chatbot and it isn't a bare timer.
 
-- **A guided brew ritual, not just a timer.** Picking a tea and hitting
-  "Begin Brew Session" walks through warming the teaware, measuring leaves,
-  rinsing, and each steep in sequence — with an animated cup ([`BrewCup.tsx`](src/components/BrewCup.tsx))
-  that fills and steams as the seconds count down, so there's something to
-  watch instead of a bare number. A floating mini-timer ([`BrewMini.tsx`](src/components/BrewMini.tsx))
-  keeps the ritual visible even after you close the modal to read something
-  or chat.
-- **Real dead time, used deliberately.** During an actual steep — the
-  minute where there's genuinely nothing to do but wait — the modal
-  surfaces four prompts: a guided mindful-session narration, the tea's
-  history, a fun fact, and its health benefits (see `STEEP_PROMPTS` in
-  [`TeaCompanion.tsx`](src/components/TeaCompanion.tsx)). They exist
-  specifically for that gap, not as generic chat suggestions bolted onto
-  the top of the screen.
-- **A companion grounded in one specific place.** The AI guide isn't a
-  generic tea encyclopedia — its system prompt ([`teaBrewing.ts`](src/lib/teaBrewing.ts))
-  is built from Tea Chapter's own catalogue and business knowledge base
-  ([`knowledgeBase.ts`](src/lib/knowledgeBase.ts)): ~58 teas with category,
-  origin, aroma, taste, brewing instructions, and a `mindfulness_note` per
-  tea, plus the teahouse's own history (founded 1989, visited by Queen
-  Elizabeth II in 1989, its three distinct seating rooms). It's instructed
-  to guide attention to sensory detail — colour, aroma, warmth, taste —
-  and to keep mindfulness grounded and practical rather than reaching for
-  spiritual jargon.
-- **A flavour profile you can actually read.** For catalogue teas with
-  enough structured data, a six-axis chart ([`TeaProfileChart.tsx`](src/components/TeaProfileChart.tsx),
-  derived in [`teaVisuals.ts`](src/lib/teaVisuals.ts)) sketches body,
-  sweetness, floral, earthy, astringency, and brightness — alongside a
-  liquor colour theme that tints the brew cup and mini-timer to roughly
-  match what's actually in the pot.
-- **Protecting a brew already in progress.** Switching teas mid-steep asks
-  first, rather than silently discarding a timer that's running — small,
-  but it's the same instinct: the session in progress matters more than
-  a fast UI shortcut.
+## Features
+
+- **Guided brew ritual.** Pick one of the ~58 teas in the catalogue and you're
+  walked through each step in order: warm the teaware, add the tea, rinse,
+  then each timed steep, and finally pour. Every step has an animated
+  illustration. A chime plays when a timer finishes.
+- **Matched to your setup.** Before you start, it asks which teaware you have
+  (a full gaiwan set or a portable filter-teapot set) and whether you're using
+  loose leaves or a tea bag. The steps, the illustrations and the checklist of
+  what you'll need all follow from those two answers.
+- **Spoken guidance.** A calm Singaporean narrator (ElevenLabs) reads each
+  step aloud. It works in English and Chinese (中文).
+- **Ambient music.** Optional soft music generated live in the browser with
+  the Web Audio API, so the app ships no audio files. It gets quieter while
+  the narrator is speaking.
+- **Something to do while it steeps.** During each steep you can tap a
+  prompt: a mindfulness question, the tea's history, a fun fact, or its
+  health benefits.
+- **A chat companion that knows the teahouse.** Claude answers questions from
+  Tea Chapter's own catalogue and history, and steers you toward colour,
+  aroma, warmth and taste instead of spiritual jargon. You can type or
+  dictate questions, and replies are read aloud as they stream in.
+- **Flavour profile and liquor colour.** A six-axis chart shows each tea's
+  body, sweetness, floral notes, earthiness, astringency and brightness. The
+  scene is tinted to match the colour of the brewed tea.
+- **Your brew is protected.** A brew in progress survives a page refresh. The
+  screen stays on while you brew. Switching teas partway through a steep asks
+  you to confirm first.
+- **First-visit tour.** New visitors are offered a short spotlight
+  walkthrough.
 
 ## Setup
 
 ```bash
 npm install
 cp .env.local.example .env.local
-# then edit .env.local and set ANTHROPIC_API_KEY
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Then open <http://localhost:3000>. Set these in `.env.local`:
 
-## How it's built
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `ANTHROPIC_API_KEY` | Yes | Chat companion |
+| `ANTHROPIC_MODEL` | No | Override the default Claude model |
+| `ELEVENLABS_API_KEY` | No | Spoken narration. Without it, the app runs silently. |
+| `ELEVENLABS_VOICE_ID` | No | Override the default voice. The default needs a paid ElevenLabs plan; on the free tier, use a premade voice. |
 
-A Next.js (App Router + TypeScript) port of the original single-file
-`tea_companion.html` prototype, split into components and data/logic
-modules instead of one big `<script>` block. The chat companion streams
-its replies through a same-origin API route
-([`src/app/api/chat/route.ts`](src/app/api/chat/route.ts)), which is the
-only place the Anthropic API key ever lives — the browser never sees it.
+Both keys are used only on the server, in the API routes. The browser never
+receives them.
+
+## Architecture
+
+The app is built with Next.js 16 (App Router), React 19 and TypeScript, and
+has no other runtime dependencies.
 
 ```
 src/
   app/
-    api/chat/route.ts   # server-side streaming proxy to the Anthropic Messages API
-    layout.tsx           # fonts + metadata
-    page.tsx              # renders <TeaCompanion />
-    globals.css           # app styling
+    api/chat/route.ts     streaming proxy to the Anthropic Messages API
+    api/narrate/route.ts  proxy to ElevenLabs text-to-speech
   components/
-    TeaCompanion.tsx      # top-level state + layout
-    ChatArea.tsx           # message list, welcome state, typing indicator
-    BrewModal.tsx           # guided brew ritual modal
-    BrewMini.tsx             # floating mini-timer (shown when modal is closed)
-    BrewCup.tsx               # animated filling/steaming cup
-    TeaProfileChart.tsx        # six-axis flavour profile chart
+    TeaCompanion.tsx      top-level state, home screen, steep prompts
+    BrewModal.tsx         guided brew ritual (steps, timer, teaware checklist)
+    BrewScene.tsx         animated per-step SVG scene
+    TrayScene.tsx         home-screen tea tray illustration
+    BrewMini.tsx          floating mini-timer when the ritual is minimised
+    ChatDock.tsx          Guide/Chat switch, voice and music controls
+    ChatArea.tsx          chat messages and dictation input
+    TeaProfileChart.tsx   six-axis flavour chart
+    Tour.tsx              first-visit welcome and spotlight tour
   lib/
-    knowledgeBase.ts       # Tea Chapter's catalogue + business info (typed)
-    teaOptions.ts            # catalogue combobox options
-    teaBrewing.ts             # KB lookup, system-prompt builder, brew-step parser
-    teaVisuals.ts              # liquor colour + flavour profile derivation
-    formatText.ts               # lightweight markdown -> HTML for chat bubbles
-    playBeep.ts                  # WebAudio chime on timer completion
-    types.ts
+    knowledgeBase.ts      Tea Chapter catalogue and business facts
+    teaBrewing.ts         tea lookup, system prompt, brew-step parser
+    teaware.ts            teaware sets and what each one needs
+    brewCues.ts           step instructions in English and Chinese
+    teaVisuals.ts         liquor colour and flavour-profile derivation
+    useNarration.ts       narration hook (guide and chat-reply lanes)
+    useAmbient.ts         Web Audio ambient music
+    useWakeLock.ts        keeps the screen on while brewing
 ```
+
+`PRODUCT.md` covers the product principles. `DESIGN.md` covers the visual
+system, called "The Instrument Tray".
