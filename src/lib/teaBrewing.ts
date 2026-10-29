@@ -4,6 +4,7 @@
 import { KNOWLEDGE_BASE, Tea } from "./knowledgeBase";
 import { getTeaSet, leafGrams, TeaSetId } from "./teaware";
 import { BrewContext, stepText } from "./brewCues";
+import { PersonaId, getPersona } from "./personas";
 
 export function findTea(name: string): Tea | null {
   if (!name) return null;
@@ -40,8 +41,12 @@ Name: ${tea.name}
 ${tea.description || ""}`;
 }
 
-export function buildSystemPrompt(currentTea: string): string {
+export function buildSystemPrompt(currentTea: string, personaId: PersonaId = "original"): string {
   const biz = JSON.stringify(KNOWLEDGE_BASE.business, null, 2);
+  // The companion picked before brewing (see personas.ts) keeps its
+  // character in chat too; the facts and format rules below still apply.
+  const tone = getPersona(personaId).chatTone;
+  const character = tone ? `\n\nCOMPANION CHARACTER: ${tone} Keep every brewing fact accurate.` : "";
   const teaCtx = currentTea
     ? `\n\nCURRENT SESSION TEA:\n${buildTeaContext(currentTea)}`
     : "";
@@ -70,7 +75,7 @@ MINDFULNESS QUESTION: When asked for a mindfulness question, reply with only a t
 
 CITATION: Reference Tea Chapter naturally when drawing from their catalogue (e.g. "Tea Chapter notes…").
 
-NARRATOR AWARENESS: Your responses may be read aloud. Avoid using markdown symbols like ** or # in ways that sound awkward when spoken. Use natural spoken language flow.${teaCtx}`;
+NARRATOR AWARENESS: Your responses may be read aloud. Avoid using markdown symbols like ** or # in ways that sound awkward when spoken. Use natural spoken language flow.${character}${teaCtx}`;
 }
 
 export interface BrewStep {
@@ -79,7 +84,7 @@ export interface BrewStep {
   seconds: number;
   // Each kind drives its own animated scene (see BrewScene.tsx). Timings are
   // fixed, so there is nothing to tune.
-  kind?: "prep" | "warm" | "measure" | "rinse" | "steep" | "pour";
+  kind?: "companion" | "prep" | "warm" | "measure" | "rinse" | "steep" | "pour";
   num?: number;
 }
 
@@ -117,6 +122,7 @@ export function parseBrewSteps(
     kind,
   });
 
+  steps.push(step("companion")); // who talks you through it, and in what voice
   steps.push(step("prep")); // the checklist: what you're brewing with
   steps.push(step("warm"));
   steps.push(step("measure"));

@@ -13,7 +13,7 @@ export interface BrewContext {
   grams: string | null; // loose leaf amount from the catalogue, e.g. "5–7g"
 }
 
-type StepKind = "prep" | "warm" | "measure" | "rinse" | "steep" | "pour";
+type StepKind = "companion" | "prep" | "warm" | "measure" | "rinse" | "steep" | "pour";
 
 function ordinal(n: number): string {
   return n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`;
@@ -48,6 +48,10 @@ export function stepText(
   const gramsZh = grams ? grams.replace(/g$/, "克") : "约3克";
 
   switch (kind) {
+    case "companion":
+      return zh
+        ? { label: "选择陪伴", sub: "选一位陪您泡茶的角色，以及您喜欢的声音。" }
+        : { label: "Choose your companion", sub: "Pick who brews with you, and the voice you'd like to hear." };
     case "prep":
       return zh
         ? { label: "开始之前", sub: "选择您用的是散茶还是茶包，以及哪套茶具，然后准备好下面这些。" }

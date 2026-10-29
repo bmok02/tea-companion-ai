@@ -198,6 +198,19 @@ inside conceptually.
   step is this same composition with different content, never a bespoke
   layout per step.
 
+## Companion Accents
+
+Picking a companion (Tea Master, Hyrox, Exam Season, Teasing Partner) keeps
+the Instrument Tray exactly as it is and only swaps the accent: the clay
+tokens are redefined under `[data-persona]` in `globals.css` (jade, volt
+green, pen blue, pink), on the brew and on the floating dock while a brew is
+up. A small badge names the companion in the header, and one faint motif sits
+in the margins (`PersonaBackdrop.tsx`, same stroke language as the scene):
+ink-wash ridges and incense, a heart-rate trace, notebook rules, doodles and
+a pair of eyes. Fonts, ground, layout and controls never change. Motion runs
+only while a steep is timing, and stops under reduced motion. Original sets
+nothing.
+
 ## Do's and Don'ts
 
 - **Do** keep the tray illustration as the single visual world; a new

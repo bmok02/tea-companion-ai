@@ -1041,10 +1041,10 @@ body::before {
 @keyframes pulse-gold {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(181, 82, 47, 0.4);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--gold) 40%, transparent);
   }
   50% {
-    box-shadow: 0 0 0 6px rgba(181, 82, 47, 0);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--gold) 0%, transparent);
   }
 }
 
@@ -2609,7 +2609,8 @@ body::before {
 .dock-panel-tea {
   flex: 1;
 }
-.dock-voice {
+.dock-voice,
+.dock-close {
   flex-shrink: 0;
   width: 32px;
   height: 32px;
@@ -2625,7 +2626,8 @@ body::before {
     color 0.2s var(--ease-calm),
     border-color 0.2s var(--ease-calm);
 }
-.dock-voice:hover {
+.dock-voice:hover,
+.dock-close:hover {
   color: var(--ink);
   border-color: var(--gold);
 }
@@ -3276,6 +3278,86 @@ body[data-tour="on"] .dock {
   outline: 2px solid var(--gold-light);
   outline-offset: 2px;
 }
+.persona-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+  text-align: left;
+}
+.persona-opt {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 64px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--gold-deep) 45%, transparent);
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s var(--ease-calm), color 0.2s var(--ease-calm), border-color 0.2s var(--ease-calm);
+}
+.persona-opt strong {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--ink);
+}
+.persona-opt.on {
+  background: var(--gold-deep);
+  border-color: var(--gold-deep);
+  color: color-mix(in srgb, white 85%, transparent);
+}
+.persona-opt.on strong {
+  color: white;
+}
+.persona-opt:focus-visible,
+.voice-select:focus-visible,
+.voice-hear:focus-visible {
+  outline: 2px solid var(--gold-light);
+  outline-offset: 2px;
+}
+/* The plain guide sits alone across the top; the four characters below. */
+.persona-opt:first-child {
+  grid-column: 1 / -1;
+}
+.voice-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+.voice-select {
+  min-height: 40px;
+  min-width: 0;
+  max-width: 220px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--gold-deep);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+.voice-hear {
+  flex: none;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--gold-deep);
+  background: transparent;
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
 .prep-blurb {
   margin: 8px 0 0;
   font-size: 14px;
@@ -3339,5 +3421,264 @@ body[data-tour="on"] .dock {
 @media (min-width: 560px) {
   .prep-list {
     grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* ── Companion accents ───────────────────────────────────────────────────
+   A companion keeps the tray exactly as it is and only swaps the accent:
+   the clay tokens are redefined on .brew-overlay (and on the floating dock
+   while a brew is up), so buttons, the timer bar, the step dots and the
+   scene's clay details all follow. On top of that, a small badge in the
+   header and one faint motif in the margins (PersonaBackdrop.tsx). Original
+   sets nothing. */
+.brew-overlay[data-persona="master"],
+html[data-brew-persona="master"] .dock {
+  --gold: #4f8f74;
+  --gold-light: #7fbf9f;
+  --gold-text: #8fcaa9;
+  --gold-deep: #2c6650;
+  --border: rgba(127, 191, 159, 0.25);
+}
+.brew-overlay[data-persona="hyrox"],
+html[data-brew-persona="hyrox"] .dock {
+  --gold: #9bbf2a;
+  --gold-light: #c4e64a;
+  --gold-text: #cbe86a;
+  --gold-deep: #4e6b12;
+  --border: rgba(196, 230, 74, 0.22);
+}
+.brew-overlay[data-persona="exam"],
+html[data-brew-persona="exam"] .dock {
+  --gold: #4f7be0;
+  --gold-light: #7c9ef0;
+  --gold-text: #9ab6ff;
+  --gold-deep: #2f4fa8;
+  --border: rgba(124, 158, 240, 0.25);
+}
+.brew-overlay[data-persona="tease"],
+html[data-brew-persona="tease"] .dock {
+  --gold: #e0558f;
+  --gold-light: #ff8cc0;
+  --gold-text: #ff9cc8;
+  --gold-deep: #b02a64;
+  --border: rgba(255, 140, 192, 0.25);
+}
+
+.brew-modal {
+  position: relative;
+  isolation: isolate;
+}
+.brew-modal-header,
+.brew-stage {
+  position: relative;
+  z-index: 1;
+}
+.persona-badge {
+  flex-shrink: 0;
+  padding: 4px 10px 3px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--gold-text);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.persona-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.persona-bg svg {
+  position: absolute;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Tea Master: ink-wash ridges along the foot, incense while it steeps. */
+.pb-ridges {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 28vh;
+}
+.pb-ridge {
+  stroke: none;
+  fill: var(--gold);
+}
+.pb-ridge.far {
+  opacity: 0.05;
+}
+.pb-ridge.near {
+  opacity: 0.08;
+}
+.pb-incense {
+  left: max(16px, calc(50% - 420px));
+  bottom: 6vh;
+  width: 56px;
+  height: 182px;
+  opacity: 0.8;
+}
+.pb-stick {
+  stroke: var(--brass);
+  stroke-width: 2;
+}
+.pb-holder {
+  fill: var(--cream);
+  stroke: var(--brass);
+  stroke-width: 1.5;
+}
+.pb-ember {
+  fill: var(--gold-light);
+}
+.pb-smoke {
+  stroke: rgba(241, 234, 217, 0.3);
+  stroke-width: 1.4;
+  stroke-dasharray: 220;
+  stroke-dashoffset: 220;
+  opacity: 0;
+}
+.persona-bg-master.waiting .pb-smoke {
+  animation: smoke 7s ease-out infinite;
+}
+.persona-bg-master.waiting .pb-smoke.s2 {
+  animation-delay: 3.5s;
+}
+@keyframes smoke {
+  0% {
+    stroke-dashoffset: 220;
+    opacity: 0;
+    transform: translateY(0);
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+    transform: translateY(-18px);
+  }
+}
+
+/* Hyrox: a heart-rate trace that slows while the tea steeps. */
+.pb-ecg {
+  left: 0;
+  right: 0;
+  top: 96px;
+  width: 100%;
+  height: 56px;
+}
+.pb-ecg path {
+  stroke: var(--gold-light);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 90 1110;
+  stroke-dashoffset: 1200;
+  opacity: 0.22;
+  animation: ecg 1.4s linear infinite;
+}
+.persona-bg-hyrox.waiting .pb-ecg path {
+  animation-duration: 3.2s;
+  opacity: 0.4;
+}
+@keyframes ecg {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Exam Season: the faint rules and margin of a notebook page. */
+.pb-paper {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, transparent calc(max(18px, 50% - 400px) - 1px), rgba(224, 100, 92, 0.22) calc(max(18px, 50% - 400px) - 1px) max(18px, 50% - 400px), transparent max(18px, 50% - 400px)),
+    repeating-linear-gradient(180deg, transparent 0 31px, rgba(124, 158, 240, 0.07) 31px 32px);
+  background-position: 0 0, 0 70px;
+}
+
+/* Teasing Partner: doodles in the margins, eyes that glance about. */
+.pb-doodles {
+  top: 80px;
+  width: 150px;
+  height: 460px;
+}
+.pb-doodles.left {
+  left: max(-20px, calc(50% - 470px));
+}
+.pb-doodles.right {
+  right: max(-20px, calc(50% - 470px));
+}
+.pb-doodles path {
+  stroke: var(--gold-light);
+  stroke-width: 2.5;
+  opacity: 0.18;
+}
+.pb-eyes {
+  top: 72px;
+  right: max(16px, calc(50% - 360px));
+  width: 56px;
+  height: 28px;
+  opacity: 0.85;
+}
+.pb-eye {
+  fill: var(--ink);
+  stroke: var(--paper-dark);
+  stroke-width: 2.5;
+}
+.pb-pupils {
+  fill: var(--paper-dark);
+}
+.persona-bg-tease.waiting .pb-pupils {
+  animation: sideeye 4.4s ease-in-out infinite;
+}
+@keyframes sideeye {
+  0%,
+  18% {
+    transform: translate(-7px, -2px);
+  }
+  30%,
+  62% {
+    transform: translate(7px, -2px);
+  }
+  72%,
+  100% {
+    transform: translate(0, 2px);
+  }
+}
+
+@media (max-width: 719px) {
+  .pb-doodles {
+    display: none;
+  }
+  .pb-incense {
+    left: 6px;
+    width: 40px;
+    height: 130px;
+    opacity: 0.6;
+  }
+  .pb-eyes {
+    top: 64px;
+    right: 14px;
+    width: 44px;
+    height: 22px;
+  }
+}
+/* On a narrow phone the tea's name needs the header more than the badge. */
+@media (max-width: 420px) {
+  .persona-badge {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .persona-bg * {
+    animation: none !important;
   }
 }

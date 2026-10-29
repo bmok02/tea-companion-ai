@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getVoice } from "@/lib/voices";
 
 // Server-side proxy to the ElevenLabs text-to-speech API — keeps the API key
 // off the client entirely, same role src/app/api/chat/route.ts plays for the
@@ -15,6 +16,8 @@ const DEFAULT_VOICE_ID = "sla02gCKN0hNfNn9ORJN";
 interface NarrateRequestBody {
   text?: string;
   lang?: string;
+  // An id from src/lib/voices.ts; anything else falls back to the default.
+  voice?: string;
 }
 
 export async function POST(req: NextRequest) {
@@ -41,7 +44,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const voiceId = process.env.ELEVENLABS_VOICE_ID || DEFAULT_VOICE_ID;
+  const voiceId =
+    getVoice(body.voice).elevenId || process.env.ELEVENLABS_VOICE_ID || DEFAULT_VOICE_ID;
 
   let upstream: Response;
   try {

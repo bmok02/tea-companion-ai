@@ -7,8 +7,11 @@ import { useNarration } from "@/lib/useNarration";
 import { ZH_UI, zhStep } from "@/lib/brewZh";
 import { TEA_SETS, TeaSetId, TeawareItem, ingredientItem } from "@/lib/teaware";
 import { BrewContext, timedCue } from "@/lib/brewCues";
+import { PERSONAS, PersonaPhase, getPersona, personaCue } from "@/lib/personas";
+import { VOICES } from "@/lib/voices";
 import BrewScene, { BrewSceneMode } from "./BrewScene";
 import TeawareIconArt from "./TeawareIcon";
+import PersonaBackdrop from "./PersonaBackdrop";
 
 interface BrewModalProps {
   open: boolean;
@@ -75,6 +78,19 @@ function BrewModal({
   const fillPct = isTimed ? fillPercent(secondsLeft, totalSeconds) : 0;
   const urgent = isTimed && started && !finished && secondsLeft <= 10;
   const zh = narration.lang === "zh";
+  // The companion's spoken version of a cue, or null for the plain guide
+  // (always plain in Chinese: the companion scripts are English only). Only
+  // the voice uses it; the screen keeps the short plain instruction.
+  const lastSteepIdx = steps.reduce((last, s, i) => (s.kind === "steep" ? i : last), -1);
+  const said = (phase: PersonaPhase): string | null =>
+    !zh && step?.kind && step.kind !== "prep" && step.kind !== "companion"
+      ? personaCue(narration.persona, step.kind, phase, brewCtx, {
+          num: step.num,
+          seconds: step.seconds,
+          lastSteep: currentStep === lastSteepIdx,
+        })
+      : null;
+  const intro = said("intro");
   const text = step ? (zh ? zhStep(step, brewCtx) : { label: step.label, sub: step.sub }) : undefined;
 
   // What the scene shows, and the one sentence that says what to do about it.
@@ -94,6 +110,8 @@ function BrewModal({
     else if (mode === "wait") cue = timedCue(paused ? "paused" : "wait", isRinse, brewCtx, lang);
     else if (mode === "pour-out") cue = timedCue("done", isRinse, brewCtx, lang);
   }
+  const waitLine = mode === "wait" ? said("wait") : null;
+  const doneLine = said("done");
 
   // Speak the step when it starts, and again the moment the clock runs out —
   // that's the one instruction the drinker can't afford to miss.
@@ -101,18 +119,34 @@ function BrewModal({
   useEffect(() => {
     if (!open || !step) return;
     const t = zhStep(step, brewCtx);
-    speak(zh ? `${t.label}。${t.sub}` : `${step.label}. ${step.sub}`);
+    speak(zh ? `${t.label}。${t.sub}` : `${step.label}. ${intro ?? step.sub}`);
     // brewCtx is read for the Chinese wording only; the step object itself
     // is rebuilt whenever the equipment changes, which re-fires this.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, step, speak, zh]);
+  }, [open, step, speak, zh, intro]);
+  // A companion also keeps you company while the timer runs; the plain
+  // guide stays quiet then.
+  useEffect(() => {
+    if (open && waitLine) speak(waitLine);
+  }, [open, waitLine, speak]);
   useEffect(() => {
     if (!open || !step || !finished || !isTimed) return;
-    speak(timedCue("done", step.kind === "rinse", brewCtx, zh ? "zh" : "en"));
+    speak(doneLine ?? timedCue("done", step.kind === "rinse", brewCtx, zh ? "zh" : "en"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, step, finished, isTimed, speak, zh]);
+  }, [open, step, finished, isTimed, speak, zh, doneLine]);
+  const companion = getPersona(narration.persona);
+  // The floating dock sits outside this overlay; flag the page so it takes
+  // the companion's colours too while the brew is up.
+  useEffect(() => {
+    const root = document.documentElement;
+    if (open && companion.id !== "original") root.dataset.brewPersona = companion.id;
+    else delete root.dataset.brewPersona;
+  }, [open, companion.id]);
 
   const isPrep = step?.kind === "prep";
+  const isCompanion = step?.kind === "companion";
+  // The two setup pages: no scene, no cue, just the questions.
+  const isSetup = isPrep || isCompanion;
   const { set: teaSet, bag } = brewCtx;
   const prepItems: TeawareItem[] = [ingredientItem(bag, brewCtx.grams), ...teaSet.items];
 
@@ -121,12 +155,16 @@ function BrewModal({
   const nextText = isTimed && !finished ? (zh ? ZH_UI.skip : "Skip") : zh ? ZH_UI.next : "Next step";
 
   return (
-    <div className={`brew-overlay${open ? " open" : ""}`} id="brewOverlay">
+    <div className={`brew-overlay${open ? " open" : ""}`} id="brewOverlay" data-persona={companion.id}>
       <div className="brew-modal">
+        <PersonaBackdrop persona={companion.id} waiting={mode === "wait" && !paused} />
         <div className="brew-modal-header">
           <span className="brew-modal-title" id="brewModalTitle">
             {title}
           </span>
+          {companion.id !== "original" && (
+            <span className="persona-badge">{zh ? companion.nameZh : companion.name}</span>
+          )}
           <div className="brew-modal-header-actions">
             <button
               type="button"
@@ -178,7 +216,7 @@ function BrewModal({
 
         <div className="brew-stage">
           <div className="brew-scene">
-            {step && !isPrep && (
+            {step && !isSetup && (
               <BrewScene
                 // A fresh scene per step and phase, so its loop always starts
                 // from the first frame of the action being asked for.
@@ -192,6 +230,53 @@ function BrewModal({
               />
             )}
           </div>
+
+          {isCompanion && (
+            <section className="prep" aria-label={zh ? "选择陪伴" : "Choose your companion"}>
+              <fieldset className="prep-q">
+                <legend>{zh ? "谁陪您泡茶？" : "Who's brewing with you?"}</legend>
+                <div className="persona-grid">
+                  {PERSONAS.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      aria-pressed={p.id === companion.id}
+                      className={`persona-opt${p.id === companion.id ? " on" : ""}`}
+                      onClick={() => narration.setPersona(p.id)}
+                    >
+                      <strong>{zh ? p.nameZh : p.name}</strong>
+                      <span>{zh ? p.taglineZh : p.tagline}</span>
+                    </button>
+                  ))}
+                </div>
+                {zh && companion.id !== "original" && (
+                  <p className="prep-blurb">角色台词目前只有英文版，中文模式下使用原版步骤。</p>
+                )}
+                <div className="voice-row">
+                  <label htmlFor="voicePick">{zh ? "声音" : "Voice"}</label>
+                  <select
+                    id="voicePick"
+                    className="voice-select"
+                    value={narration.voice}
+                    onChange={(e) => narration.setVoice(e.target.value)}
+                  >
+                    {VOICES.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name} · {v.note}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="voice-hear"
+                    onClick={() => narration.preview(zh ? "您好，我会一步一步陪您泡茶。" : companion.hello)}
+                  >
+                    {zh ? "试听" : "Hear it"}
+                  </button>
+                </div>
+              </fieldset>
+            </section>
+          )}
 
           {isPrep && (
             <section className="prep" aria-label={zh ? "开始之前" : "Before you start"}>
@@ -253,7 +338,7 @@ function BrewModal({
             </section>
           )}
 
-          {step && !isPrep && (
+          {step && !isSetup && (
             <div className="brew-cue" key={`${currentStep}-${mode}`} aria-live="polite">
               <div className="brew-cue-title">
                 {text?.label}

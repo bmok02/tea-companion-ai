@@ -43,7 +43,9 @@ const STEEP_PROMPTS = [
 // A brew in progress survives a refresh: the tea and where the timer stood
 // are kept here, and the steps themselves are rebuilt from the tea. Old sessions are dropped — a cup
 // abandoned last night shouldn't greet you this morning.
-const BREW_STORAGE_KEY = "teaCompanion.brew.v2";
+// v3: a companion step now comes before the equipment step, so step indices
+// saved by v2 would land one step early.
+const BREW_STORAGE_KEY = "teaCompanion.brew.v3";
 const TEA_SET_STORAGE_KEY = "teaCompanion.teaSet.v1";
 // Set once the first-visit question has been answered (either way).
 const TOUR_STORAGE_KEY = "teaCompanion.tour.v1";
@@ -389,7 +391,7 @@ export default function TeaCompanion() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          system: buildSystemPrompt(currentTea),
+          system: buildSystemPrompt(currentTea, narration.persona),
           messages: historyRef.current,
         }),
       });

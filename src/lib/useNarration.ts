@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Lang } from "./brewZh";
+import { DEFAULT_PERSONA_ID, PersonaId, getPersona } from "./personas";
+import { DEFAULT_VOICE_ID, getVoice } from "./voices";
 
 // Reads brew-step instructions and chat replies aloud via /api/narrate
 // (ElevenLabs). Two lanes, two <audio> elements:
@@ -20,6 +22,8 @@ const MUTED_STORAGE_KEY = "teaCompanion.narration.muted";
 // by the earlier opt-in-style toggle so everyone starts hearing replies.
 const REPLY_MUTED_STORAGE_KEY = "teaCompanion.narration.replyMuted.v2";
 const LANG_STORAGE_KEY = "teaCompanion.narration.lang";
+const PERSONA_STORAGE_KEY = "teaCompanion.persona";
+const VOICE_STORAGE_KEY = "teaCompanion.narration.voice";
 
 // One spoken-reply session: text is fed in as it streams, cut into sentence
 // chunks, fetched one at a time (a clip or two ahead of playback) and played
@@ -60,6 +64,12 @@ export function useNarration() {
   // Set when the server refuses to narrate (missing key, free-tier voice,
   // quota) so the UI can say why instead of staying mysteriously silent.
   const [problem, setProblem] = useState<string | null>(null);
+  // Who's talking: the companion's script (see personas.ts) and the voice
+  // reading it. Picking a companion also picks its voice; the voice can then
+  // be changed on its own.
+  const [persona, setPersonaState] = useState<PersonaId>(DEFAULT_PERSONA_ID);
+  const [voice, setVoiceState] = useState(DEFAULT_VOICE_ID);
+  const voiceRef = useRef(DEFAULT_VOICE_ID);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const replyAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -90,6 +100,13 @@ export function useNarration() {
       if (localStorage.getItem(LANG_STORAGE_KEY) === "zh") {
         langRef.current = "zh";
         setLang("zh");
+      }
+      const savedPersona = localStorage.getItem(PERSONA_STORAGE_KEY);
+      if (savedPersona) setPersonaState(getPersona(savedPersona).id);
+      const savedVoice = localStorage.getItem(VOICE_STORAGE_KEY);
+      if (savedVoice) {
+        voiceRef.current = getVoice(savedVoice).id;
+        setVoiceState(voiceRef.current);
       }
     } catch {
       // Storage unavailable — defaults stand.
@@ -122,7 +139,7 @@ export function useNarration() {
       const res = await fetch("/api/narrate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, lang: language }),
+        body: JSON.stringify({ text, lang: language, voice: voiceRef.current }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
@@ -139,24 +156,28 @@ export function useNarration() {
   }
 
   // ── Guide lane ────────────────────────────────────────────────────────
-  async function playGuide(text: string) {
+  // `force` plays even while the guide is muted (a voice preview the drinker
+  // asked for).
+  async function playGuide(text: string, force = false) {
     const audio = audioRef.current;
     if (!audio) return;
     currentTextRef.current = text;
 
-    let url = cacheRef.current.get(text);
+    // The same words in another voice are a different clip.
+    const key = `${voiceRef.current}|${text}`;
+    let url = cacheRef.current.get(key);
     if (!url) {
       const fetched = await fetchClip(text, langRef.current);
       if (!fetched) return;
       url = fetched;
-      cacheRef.current.set(text, url);
+      cacheRef.current.set(key, url);
     }
 
     // A step change (or replay) that happened while this fetch was in
     // flight already moved on — don't talk over it.
     if (currentTextRef.current !== text) return;
     // Muted while the audio was being fetched.
-    if (mutedRef.current) return;
+    if (mutedRef.current && !force) return;
     audio.src = url;
     // Chat has the floor: park the clip and let it start once chat is done.
     if (replyActiveRef.current) {
@@ -186,6 +207,38 @@ export function useNarration() {
     playGuide(text);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Say a sample line in the current voice, now, even over the step's own
+  // narration and even if the guide is muted.
+  const preview = useCallback((text: string) => {
+    audioRef.current?.pause();
+    playGuide(text, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const setVoice = useCallback((id: string) => {
+    const next = getVoice(id).id;
+    voiceRef.current = next;
+    setVoiceState(next);
+    try {
+      localStorage.setItem(VOICE_STORAGE_KEY, next);
+    } catch {
+      // Preference just won't persist.
+    }
+  }, []);
+
+  const setPersona = useCallback(
+    (id: PersonaId) => {
+      setPersonaState(id);
+      setVoice(getPersona(id).voice);
+      try {
+        localStorage.setItem(PERSONA_STORAGE_KEY, id);
+      } catch {
+        // Preference just won't persist.
+      }
+    },
+    [setVoice]
+  );
 
   function pauseGuideForReply() {
     const audio = audioRef.current;
@@ -437,6 +490,11 @@ export function useNarration() {
     guideSpeaking,
     replySpeaking,
     problem,
+    persona,
+    voice,
+    setPersona,
+    setVoice,
+    preview,
     speak,
     feedReply,
     endReply,
