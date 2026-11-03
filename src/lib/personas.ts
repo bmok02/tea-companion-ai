@@ -2,8 +2,9 @@
 // rewords the guide's English cues in its own voice (from the persona scripts
 // sheet) without changing what to do, so every line is still built from the
 // drinker's equipment like brewCues.ts. "original" keeps the plain guide and
-// returns no lines, so the baseline cues stand. Chinese mode always uses the
-// baseline cues; the scripts are English only.
+// returns no lines, so the baseline cues stand. In Chinese mode the steps keep
+// the baseline cues and the companion only speaks while the timer runs (see
+// ZH_WAIT).
 
 import { BrewContext, formatTime } from "./brewCues";
 
@@ -20,6 +21,7 @@ export interface Persona {
   voice: string;
   // Said when previewing the voice.
   hello: string;
+  helloZh: string;
   // Added to the chat system prompt so replies stay in character.
   chatTone: string | null;
 }
@@ -33,6 +35,7 @@ export const PERSONAS: Persona[] = [
     taglineZh: "平静简洁的向导，只讲步骤。",
     voice: "default",
     hello: "Hello. I'll guide you through each step, one at a time.",
+    helloZh: "您好，我会一步一步陪您泡茶。",
     chatTone: null,
   },
   {
@@ -43,6 +46,7 @@ export const PERSONAS: Persona[] = [
     taglineZh: "沉静温和，每一泡都有一段传统。",
     voice: "grandfather",
     hello: "Welcome. Sit with me a while; the tea will tell us when it's ready.",
+    helloZh: "来，坐一会儿。茶好了，它自己会告诉我们。",
     chatTone:
       "Speak as a traditional tea master: calm, warm and gently educational, weaving in heritage and story (Lu Yu, 醒茶, 茶七酒八, tapping two fingers to say thanks) where it fits.",
   },
@@ -54,6 +58,7 @@ export const PERSONAS: Persona[] = [
     taglineZh: "明天比赛，今天恢复。",
     voice: "coach",
     hello: "Race is tomorrow. Today, we recover. Let's brew.",
+    helloZh: "明天就比赛了，今天专心恢复。来，泡茶！",
     chatTone:
       "Speak as a high-energy race partner the day before a Hyrox race: motivating, using training language (warm-up, working set, taper), while steering the drinker toward calm and recovery.",
   },
@@ -65,6 +70,7 @@ export const PERSONAS: Persona[] = [
     taglineZh: "认真休息一下，再回去专心。",
     voice: "sarah",
     hello: "Study break, officially started. One pot, no flashcards.",
+    helloZh: "学习休息时间，正式开始。一壶茶，不看笔记。",
     chatTone:
       "Speak as an exam-season study buddy: encouraging and practical, framing the tea as a structured study break that helps the drinker go back in refreshed.",
   },
@@ -76,6 +82,7 @@ export const PERSONAS: Persona[] = [
     taglineZh: "爱开玩笑，嘴贫但不刻薄。",
     voice: "ivy",
     hello: "Oh, you're making tea? Properly? This I have to see.",
+    helloZh: "哟，你要认真泡茶？这个我一定要看看。",
     chatTone:
       "Speak as a teasing friend: playful and cheeky but never mean, with a light touch of Singlish kept classy.",
   },
@@ -207,6 +214,44 @@ const SCRIPTS: Record<Exclude<PersonaId, "original">, (k: Kit) => Lines> = {
   }),
 };
 
+// What each companion says in Chinese while the timer runs: the rinse, then
+// the 1st, 2nd, 3rd, 4th-and-on and last steep (same order as steepWait).
+// Written for Chinese speakers rather than translated line for line.
+const ZH_WAIT: Record<Exclude<PersonaId, "original">, (t: string) => [string, string, string, string, string, string]> = {
+  master: () => [
+    "让茶叶舒展一下，也让肩膀放松下来。",
+    "一千多年前，陆羽为茶写了一整本《茶经》。您只需要陪这一壶茶坐一会儿。吸气，呼气。",
+    "茶叶已经舒展开了。每一泡，都在讲它故事的不同部分。",
+    "别人为您斟茶时，用两根手指轻敲桌面，这是不打断说话的道谢。",
+    "留意一下，刚才心飘到哪里去了。再轻轻把它带回这杯茶。",
+    "最后一泡，味道更柔和，像老朋友长谈的尾声。",
+  ],
+  hyrox: (t) => [
+    "甩甩手臂，深呼吸。",
+    `${t}。不推雪橇，不扔药球，你唯一的任务就是呼吸。休息也是训练。`,
+    "第二轮。心率降下来，专注提上去。",
+    "想象一下明天：起步冷静，配速稳定。",
+    "最强的运动员，往往在赛前最冷静。呼吸。",
+    "最后一泡。减量完成，今晚早点睡。",
+  ],
+  exam: (t) => [
+    "放松下巴。对，你刚才咬着牙呢。",
+    `${t}，不看笔记，不背单词。你的大脑还在后台工作，让它去吧。`,
+    "检查一下：肩膀放下，深吸一口气，再慢慢呼出。",
+    "古代读书人备考科举，也是靠一壶茶熬过长夜。你并不孤单。",
+    "想一件今天已经弄懂的事。那也算数。",
+    "最后一泡。喝完这杯，再回去冲。你可以的。",
+  ],
+  tease: (t) => [
+    "几秒钟而已，没有手机你也活得下去。大概吧。",
+    `${t}。是不是觉得很久？这就对了。让你刷手机的拇指休息一下。`,
+    "第二泡了。承认吧，你开始享受了。",
+    "趁等的时候说个冷知识：英文的 tea，是从闽南话的“茶”来的。你阿公一定很骄傲。",
+    "还在啊？佩服佩服。深呼吸。",
+    "最后一泡。下次换你泡给我喝。",
+  ],
+};
+
 // The persona's line for a step at a phase: "intro" when the step opens (for
 // a timed step, the line asking to pour in and tap Start), "wait" while the
 // timer runs, "done" when it rings. Null means use the baseline cue.
@@ -215,9 +260,14 @@ export function personaCue(
   kind: Kind,
   phase: PersonaPhase,
   ctx: BrewContext,
-  opts: { num?: number; seconds?: number; lastSteep?: boolean } = {}
+  opts: { num?: number; seconds?: number; lastSteep?: boolean; lang?: "en" | "zh" } = {}
 ): string | null {
   if (id === "original") return null;
+  if (opts.lang === "zh") {
+    if (phase !== "wait" || (kind !== "rinse" && kind !== "steep")) return null;
+    const w = ZH_WAIT[id](formatTime(opts.seconds ?? 0, "zh"));
+    return kind === "rinse" ? w[0] : w[1 + (opts.lastSteep ? 4 : Math.min((opts.num ?? 1) - 1, 3))];
+  }
   const l = SCRIPTS[id](kit(ctx, opts.seconds ?? 0));
   if (kind === "rinse") return phase === "intro" ? l.rinseStart : phase === "wait" ? l.rinseWait : l.rinseDone;
   if (kind === "steep") {

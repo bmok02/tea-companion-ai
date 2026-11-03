@@ -78,16 +78,17 @@ function BrewModal({
   const fillPct = isTimed ? fillPercent(secondsLeft, totalSeconds) : 0;
   const urgent = isTimed && started && !finished && secondsLeft <= 10;
   const zh = narration.lang === "zh";
-  // The companion's spoken version of a cue, or null for the plain guide
-  // (always plain in Chinese: the companion scripts are English only). Only
+  // The companion's spoken version of a cue, or null for the plain guide (in
+  // Chinese only the lines while the timer runs are the companion's). Only
   // the voice uses it; the screen keeps the short plain instruction.
   const lastSteepIdx = steps.reduce((last, s, i) => (s.kind === "steep" ? i : last), -1);
   const said = (phase: PersonaPhase): string | null =>
-    !zh && step?.kind && step.kind !== "prep" && step.kind !== "companion"
+    step?.kind && step.kind !== "prep" && step.kind !== "companion"
       ? personaCue(narration.persona, step.kind, phase, brewCtx, {
           num: step.num,
           seconds: step.seconds,
           lastSteep: currentStep === lastSteepIdx,
+          lang: zh ? "zh" : "en",
         })
       : null;
   const intro = said("intro");
@@ -249,9 +250,6 @@ function BrewModal({
                     </button>
                   ))}
                 </div>
-                {zh && companion.id !== "original" && (
-                  <p className="prep-blurb">角色台词目前只有英文版，中文模式下使用原版步骤。</p>
-                )}
                 <div className="voice-row">
                   <label htmlFor="voicePick">{zh ? "声音" : "Voice"}</label>
                   <select
@@ -269,7 +267,7 @@ function BrewModal({
                   <button
                     type="button"
                     className="voice-hear"
-                    onClick={() => narration.preview(zh ? "您好，我会一步一步陪您泡茶。" : companion.hello)}
+                    onClick={() => narration.preview(zh ? companion.helloZh : companion.hello)}
                   >
                     {zh ? "试听" : "Hear it"}
                   </button>
