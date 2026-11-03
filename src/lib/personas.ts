@@ -52,8 +52,8 @@ export const PERSONAS: Persona[] = [
   },
   {
     id: "hyrox",
-    name: "Hyrox",
-    nameZh: "Hyrox 赛前伙伴",
+    name: "Hyrox Buddy",
+    nameZh: "Hyrox 搭子",
     tagline: "Race is tomorrow. Today is recovery.",
     taglineZh: "明天比赛，今天恢复。",
     voice: "coach",
@@ -64,8 +64,8 @@ export const PERSONAS: Persona[] = [
   },
   {
     id: "exam",
-    name: "Exam Season",
-    nameZh: "考试季",
+    name: "Study Pal",
+    nameZh: "学习搭子",
     tagline: "A proper study break. Lock in, then let go.",
     taglineZh: "认真休息一下，再回去专心。",
     voice: "sarah",
@@ -251,6 +251,83 @@ const ZH_WAIT: Record<Exclude<PersonaId, "original">, (t: string) => [string, st
     "最后一泡。下次换你泡给我喝。",
   ],
 };
+
+// More company for a long steep: said every so often after the steep's own
+// wait line, so a two-minute steep isn't silent after the first few seconds.
+// Each steep starts at a different place in the list.
+const MORE: Record<Exclude<PersonaId, "original">, { en: string[]; zh: string[] }> = {
+  master: {
+    en: [
+      "Listen. Even the water has its own small sounds as it settles.",
+      "There is no hurry here. The tea does its work, and we do ours by waiting.",
+      "Smell the air near the lid. The tea is already speaking.",
+      "Good tea is never rushed, and neither are good afternoons.",
+      "Let your breath slow to the pace of the leaves.",
+    ],
+    zh: [
+      "听，水静下来的时候，也有它自己的声音。",
+      "这里不赶时间。茶在做它的功夫，我们的功夫就是等。",
+      "闻一闻盖子边上，茶香已经出来了。",
+      "好茶急不得，好的午后也一样。",
+      "让呼吸慢下来，跟上茶叶舒展的节奏。",
+    ],
+  },
+  hyrox: {
+    en: [
+      "Halfway. Hold the pace. And by pace, I mean sitting still.",
+      "Drop your shoulders. Unclench your hands. Recovery is a skill.",
+      "Inhale for four, exhale for six. That's your interval.",
+      "Tomorrow you go hard. Today, you go slow. Both count.",
+      "Nearly there. Stay with it, champ.",
+    ],
+    zh: [
+      "过半了，保持配速。这里的配速，就是坐着别动。",
+      "肩膀放下，手松开。恢复也是一种能力。",
+      "吸气四秒，呼气六秒。这就是你的间歇训练。",
+      "明天拼尽全力，今天慢慢来。两样都算数。",
+      "快到了，撑住，冠军。",
+    ],
+  },
+  exam: {
+    en: [
+      "Still on break. That chapter isn't going anywhere.",
+      "Look at something far away for a few seconds. Your eyes will thank you.",
+      "If a worry pops up, write it down later. Right now, just the tea.",
+      "Roll your neck slowly, one way, then the other.",
+      "Almost done. Rested brains remember more. That's science.",
+    ],
+    zh: [
+      "还在休息哦，那一章不会跑掉的。",
+      "看看远处几秒钟，让眼睛也休息一下。",
+      "有什么担心冒出来，等下再写下来。现在，只管这杯茶。",
+      "慢慢转一转脖子，这边，再那边。",
+      "快好了。休息过的大脑记得更牢，这是有科学根据的。",
+    ],
+  },
+  tease: {
+    en: [
+      "You checked the timer again, didn't you? I saw that.",
+      "Still waiting. Character building, this.",
+      "Don't touch the lid. I can feel you wanting to touch the lid.",
+      "Look at you, being patient. Who taught you that? Oh right, me.",
+      "Almost there. Try not to look so excited.",
+    ],
+    zh: [
+      "你又看计时了对不对？我看到了哦。",
+      "还在等。这叫磨练心性，懂吗？",
+      "别碰盖子。我感觉到你很想掀开它。",
+      "哇，这么有耐心？谁教你的？哦，是我。",
+      "快好了，别一副那么兴奋的样子。",
+    ],
+  },
+};
+
+// The `beat`-th extra line during a steep (from 0), or null for the plain guide.
+export function personaMore(id: PersonaId, lang: "en" | "zh", steepNum: number, beat: number): string | null {
+  if (id === "original") return null;
+  const pool = MORE[id][lang];
+  return pool[(beat + (steepNum - 1) * 2) % pool.length];
+}
 
 // The persona's line for a step at a phase: "intro" when the step opens (for
 // a timed step, the line asking to pour in and tap Start), "wait" while the

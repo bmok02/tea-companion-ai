@@ -7,7 +7,7 @@ import { useNarration } from "@/lib/useNarration";
 import { ZH_UI, zhStep } from "@/lib/brewZh";
 import { TEA_SETS, TeaSetId, TeawareItem, ingredientItem } from "@/lib/teaware";
 import { BrewContext, timedCue } from "@/lib/brewCues";
-import { PERSONAS, PersonaPhase, getPersona, personaCue } from "@/lib/personas";
+import { PERSONAS, PersonaPhase, getPersona, personaCue, personaMore } from "@/lib/personas";
 import { VOICES } from "@/lib/voices";
 import BrewScene, { BrewSceneMode } from "./BrewScene";
 import TeawareIconArt from "./TeawareIcon";
@@ -130,6 +130,16 @@ function BrewModal({
   useEffect(() => {
     if (open && waitLine) speak(waitLine);
   }, [open, waitLine, speak]);
+  // On a long steep it keeps talking: another line every 35 seconds, but
+  // never in the last stretch, so it doesn't talk over the "time's up".
+  const beat =
+    mode === "wait" && !paused && step?.kind === "steep" && secondsLeft > 15
+      ? Math.floor((totalSeconds - secondsLeft) / 35)
+      : 0;
+  const moreLine = beat > 0 && step ? personaMore(narration.persona, zh ? "zh" : "en", step.num ?? 1, beat - 1) : null;
+  useEffect(() => {
+    if (open && moreLine) speak(moreLine);
+  }, [open, moreLine, speak]);
   useEffect(() => {
     if (!open || !step || !finished || !isTimed) return;
     speak(doneLine ?? timedCue("done", step.kind === "rinse", brewCtx, zh ? "zh" : "en"));

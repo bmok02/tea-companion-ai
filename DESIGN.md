@@ -200,7 +200,7 @@ inside conceptually.
 
 ## Companion Accents
 
-Picking a companion (Tea Master, Hyrox, Exam Season, Teasing Partner) keeps
+Picking a companion (Tea Master, Hyrox Buddy, Study Pal, Teasing Partner) keeps
 the Instrument Tray exactly as it is and only swaps the accent: the clay
 tokens are redefined under `[data-persona]` in `globals.css` (jade, volt
 green, pen blue, pink), on the brew and on the floating dock while a brew is

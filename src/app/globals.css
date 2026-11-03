@@ -3566,7 +3566,7 @@ html[data-brew-persona="tease"] .dock {
   }
 }
 
-/* Hyrox: a heart-rate trace that slows while the tea steeps. */
+/* Hyrox Buddy: a heart-rate trace that slows while the tea steeps. */
 .pb-ecg {
   left: 0;
   right: 0;
@@ -3593,7 +3593,7 @@ html[data-brew-persona="tease"] .dock {
   }
 }
 
-/* Exam Season: the faint rules and margin of a notebook page. */
+/* Study Pal: the faint rules and margin of a notebook page. */
 .pb-paper {
   position: absolute;
   inset: 0;
