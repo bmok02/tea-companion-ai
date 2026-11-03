@@ -53,7 +53,7 @@ export const PERSONAS: Persona[] = [
   {
     id: "hyrox",
     name: "Hyrox Buddy",
-    nameZh: "Hyrox 搭子",
+    nameZh: "Hyrox 战友",
     tagline: "Race is tomorrow. Today is recovery.",
     taglineZh: "明天比赛，今天恢复。",
     voice: "coach",
@@ -77,7 +77,7 @@ export const PERSONAS: Persona[] = [
   {
     id: "tease",
     name: "Teasing Partner",
-    nameZh: "损友",
+    nameZh: "逗趣搭子",
     tagline: "Playful, cheeky, never mean.",
     taglineZh: "爱开玩笑，嘴贫但不刻薄。",
     voice: "ivy",
