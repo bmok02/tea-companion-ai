@@ -252,81 +252,158 @@ const ZH_WAIT: Record<Exclude<PersonaId, "original">, (t: string) => [string, st
   ],
 };
 
-// More company for a long steep: said every so often after the steep's own
-// wait line, so a two-minute steep isn't silent after the first few seconds.
-// Each steep starts at a different place in the list.
-const MORE: Record<Exclude<PersonaId, "original">, { en: string[]; zh: string[] }> = {
+// Every steep, however short, gets one short line at the halfway mark (the
+// first list). A long steep also gets a line at a quarter and three quarters
+// (the second list), so it isn't silent after the first few seconds. Each
+// steep starts at a different place in the lists.
+type Extra = { half: string[]; more: string[] };
+const EXTRA: Record<Exclude<PersonaId, "original">, { en: Extra; zh: Extra }> = {
   master: {
-    en: [
-      "Listen. Even the water has its own small sounds as it settles.",
-      "There is no hurry here. The tea does its work, and we do ours by waiting.",
-      "Smell the air near the lid. The tea is already speaking.",
-      "Good tea is never rushed, and neither are good afternoons.",
-      "Let your breath slow to the pace of the leaves.",
-    ],
-    zh: [
-      "听，水静下来的时候，也有它自己的声音。",
-      "这里不赶时间。茶在做它的功夫，我们的功夫就是等。",
-      "闻一闻盖子边上，茶香已经出来了。",
-      "好茶急不得，好的午后也一样。",
-      "让呼吸慢下来，跟上茶叶舒展的节奏。",
-    ],
+    en: {
+      half: [
+        "Halfway. The leaves are unfolding.",
+        "Half the time has passed. Let it.",
+        "Halfway. Breathe with the tea.",
+        "Patience. We are halfway.",
+        "Halfway. The colour is deepening.",
+      ],
+      more: [
+        "Listen. Even the water has its own small sounds as it settles.",
+        "There is no hurry here. The tea does its work, and we do ours by waiting.",
+        "Smell the air near the lid. The tea is already speaking.",
+        "Good tea is never rushed, and neither are good afternoons.",
+        "Let your breath slow to the pace of the leaves.",
+      ],
+    },
+    zh: {
+      half: [
+        "过半了，茶叶正在慢慢舒展。",
+        "时间过了一半，由它去吧。",
+        "一半了，跟着茶一起呼吸。",
+        "别急，我们已经走了一半。",
+        "过半了，茶色正在变深。",
+      ],
+      more: [
+        "听，水静下来的时候，也有它自己的声音。",
+        "这里不赶时间。茶在做它的功夫，我们的功夫就是等。",
+        "闻一闻盖子边上，茶香已经出来了。",
+        "好茶急不得，好的午后也一样。",
+        "让呼吸慢下来，跟上茶叶舒展的节奏。",
+      ],
+    },
   },
   hyrox: {
-    en: [
-      "Halfway. Hold the pace. And by pace, I mean sitting still.",
-      "Drop your shoulders. Unclench your hands. Recovery is a skill.",
-      "Inhale for four, exhale for six. That's your interval.",
-      "Tomorrow you go hard. Today, you go slow. Both count.",
-      "Nearly there. Stay with it, champ.",
-    ],
-    zh: [
-      "过半了，保持配速。这里的配速，就是坐着别动。",
-      "肩膀放下，手松开。恢复也是一种能力。",
-      "吸气四秒，呼气六秒。这就是你的间歇训练。",
-      "明天拼尽全力，今天慢慢来。两样都算数。",
-      "快到了，撑住，冠军。",
-    ],
+    en: {
+      half: [
+        "Halfway! Hold the pace. And by pace, I mean sitting still.",
+        "Halfway mark. Breathe through it.",
+        "Halfway. Heart rate's coming down. Good.",
+        "That's half. Stay locked in.",
+        "Halfway, champ. Easy does it.",
+      ],
+      more: [
+        "Drop your shoulders. Unclench your hands. Recovery is a skill.",
+        "Inhale for four, exhale for six. That's your interval.",
+        "Tomorrow you go hard. Today, you go slow. Both count.",
+        "No one ever won a race by skipping recovery.",
+        "Nearly there. Stay with it.",
+      ],
+    },
+    zh: {
+      half: [
+        "过半了！保持配速，这里的配速就是坐着别动。",
+        "半程了，呼吸撑过去。",
+        "过半了，心率在降，很好。",
+        "一半了，保持专注。",
+        "半程了，冠军，慢慢来。",
+      ],
+      more: [
+        "肩膀放下，手松开。恢复也是一种能力。",
+        "吸气四秒，呼气六秒。这就是你的间歇训练。",
+        "明天拼尽全力，今天慢慢来。两样都算数。",
+        "没有人靠跳过恢复赢过比赛。",
+        "快到了，撑住。",
+      ],
+    },
   },
   exam: {
-    en: [
-      "Still on break. That chapter isn't going anywhere.",
-      "Look at something far away for a few seconds. Your eyes will thank you.",
-      "If a worry pops up, write it down later. Right now, just the tea.",
-      "Roll your neck slowly, one way, then the other.",
-      "Almost done. Rested brains remember more. That's science.",
-    ],
-    zh: [
-      "还在休息哦，那一章不会跑掉的。",
-      "看看远处几秒钟，让眼睛也休息一下。",
-      "有什么担心冒出来，等下再写下来。现在，只管这杯茶。",
-      "慢慢转一转脖子，这边，再那边。",
-      "快好了。休息过的大脑记得更牢，这是有科学根据的。",
-    ],
+    en: {
+      half: [
+        "Halfway through your break. No peeking at notes.",
+        "Halfway. You're doing great at doing nothing.",
+        "Half done. Sip of water? Oh wait, tea's coming.",
+        "Halfway. Shoulders still down?",
+        "Halfway there. Brain's recharging.",
+      ],
+      more: [
+        "Still on break. That chapter isn't going anywhere.",
+        "Look at something far away for a few seconds. Your eyes will thank you.",
+        "If a worry pops up, write it down later. Right now, just the tea.",
+        "Roll your neck slowly, one way, then the other.",
+        "Almost done. Rested brains remember more. That's science.",
+      ],
+    },
+    zh: {
+      half: [
+        "休息过半了，不许偷看笔记。",
+        "一半了。什么都不做，你做得很好。",
+        "过半了，茶快好了，再等等。",
+        "一半了，肩膀还放松着吗？",
+        "过半了，大脑正在充电。",
+      ],
+      more: [
+        "还在休息哦，那一章不会跑掉的。",
+        "看看远处几秒钟，让眼睛也休息一下。",
+        "有什么担心冒出来，等下再写下来。现在，只管这杯茶。",
+        "慢慢转一转脖子，这边，再那边。",
+        "快好了。休息过的大脑记得更牢，这是有科学根据的。",
+      ],
+    },
   },
   tease: {
-    en: [
-      "You checked the timer again, didn't you? I saw that.",
-      "Still waiting. Character building, this.",
-      "Don't touch the lid. I can feel you wanting to touch the lid.",
-      "Look at you, being patient. Who taught you that? Oh right, me.",
-      "Almost there. Try not to look so excited.",
-    ],
-    zh: [
-      "你又看计时了对不对？我看到了哦。",
-      "还在等。这叫磨练心性，懂吗？",
-      "别碰盖子。我感觉到你很想掀开它。",
-      "哇，这么有耐心？谁教你的？哦，是我。",
-      "快好了，别一副那么兴奋的样子。",
-    ],
+    en: {
+      half: [
+        "Halfway. And you haven't touched your phone? Wow.",
+        "Halfway. Don't you dare lift that lid.",
+        "Half done. I'm almost impressed.",
+        "Halfway. You're getting good at this. Don't let it go to your head.",
+        "Halfway. Still alive? Good.",
+      ],
+      more: [
+        "You checked the timer again, didn't you? I saw that.",
+        "Still waiting. Character building, this.",
+        "Don't touch the lid. I can feel you wanting to touch the lid.",
+        "Look at you, being patient. Who taught you that? Oh right, me.",
+        "Almost there. Try not to look so excited.",
+      ],
+    },
+    zh: {
+      half: [
+        "过半了，你居然没碰手机？厉害。",
+        "一半了，敢掀盖子试试看。",
+        "过半了，我差点就要佩服你了。",
+        "一半了，越来越像样了嘛，别骄傲。",
+        "过半了，还撑得住吧？",
+      ],
+      more: [
+        "你又看计时了对不对？我看到了哦。",
+        "还在等。这叫磨练心性，懂吗？",
+        "别碰盖子。我感觉到你很想掀开它。",
+        "哇，这么有耐心？谁教你的？哦，是我。",
+        "快好了，别一副那么兴奋的样子。",
+      ],
+    },
   },
 };
 
-// The `beat`-th extra line during a steep (from 0), or null for the plain guide.
-export function personaMore(id: PersonaId, lang: "en" | "zh", steepNum: number, beat: number): string | null {
+// A steep's extra line at a checkpoint (0.25, 0.5 or 0.75 of the way
+// through), or null for the plain guide.
+export function personaExtra(id: PersonaId, lang: "en" | "zh", steepNum: number, at: 0.25 | 0.5 | 0.75): string | null {
   if (id === "original") return null;
-  const pool = MORE[id][lang];
-  return pool[(beat + (steepNum - 1) * 2) % pool.length];
+  const e = EXTRA[id][lang];
+  const n = steepNum - 1;
+  if (at === 0.5) return e.half[n % e.half.length];
+  return e.more[(n * 2 + (at === 0.75 ? 1 : 0)) % e.more.length];
 }
 
 // The persona's line for a step at a phase: "intro" when the step opens (for

@@ -72,6 +72,7 @@ export function useNarration() {
   const voiceRef = useRef(DEFAULT_VOICE_ID);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const queuedRef = useRef<{ text: string; url: string } | null>(null);
   const replyAudioRef = useRef<HTMLAudioElement | null>(null);
   const cacheRef = useRef<Map<string, string>>(new Map());
   const currentTextRef = useRef<string | null>(null);
@@ -118,7 +119,15 @@ export function useNarration() {
     const audio = new Audio();
     audio.onplay = () => setGuideSpeaking(true);
     audio.onpause = () => setGuideSpeaking(false);
-    audio.onended = () => setGuideSpeaking(false);
+    audio.onended = () => {
+      setGuideSpeaking(false);
+      // A line that was waiting for this one to finish.
+      const next = queuedRef.current;
+      queuedRef.current = null;
+      if (!next || currentTextRef.current !== next.text || mutedRef.current || replyActiveRef.current) return;
+      audio.src = next.url;
+      audio.play().catch(() => {});
+    };
     audio.onerror = () => setGuideSpeaking(false);
     audioRef.current = audio;
     replyAudioRef.current = new Audio();
@@ -158,7 +167,7 @@ export function useNarration() {
   // ── Guide lane ────────────────────────────────────────────────────────
   // `force` plays even while the guide is muted (a voice preview the drinker
   // asked for).
-  async function playGuide(text: string, force = false) {
+  async function playGuide(text: string, force = false, after = false) {
     const audio = audioRef.current;
     if (!audio) return;
     currentTextRef.current = text;
@@ -178,6 +187,12 @@ export function useNarration() {
     if (currentTextRef.current !== text) return;
     // Muted while the audio was being fetched.
     if (mutedRef.current && !force) return;
+    // Let the line that's playing finish first.
+    if (after && !audio.paused && !audio.ended) {
+      queuedRef.current = { text, url };
+      return;
+    }
+    queuedRef.current = null;
     audio.src = url;
     // Chat has the floor: park the clip and let it start once chat is done.
     if (replyActiveRef.current) {
@@ -193,9 +208,10 @@ export function useNarration() {
     }
   }
 
-  const speak = useCallback((text: string) => {
+  // `after`: wait for whatever is playing to finish instead of cutting it off.
+  const speak = useCallback((text: string, opts: { after?: boolean } = {}) => {
     if (muted || !text || currentTextRef.current === text) return;
-    playGuide(text);
+    playGuide(text, false, opts.after);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [muted]);
 
