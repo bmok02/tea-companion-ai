@@ -18,8 +18,9 @@ interface ChatDockProps {
 
 // The corner switch between the two things this app does: follow the brew
 // (Guide) or ask a question (Chat). It floats bottom-right on every screen, so
-// the way back is always in the same place, and chat opens as a compact card
-// above it rather than covering the brew — the timer stays in view.
+// the way back is always in the same place, and chat opens as a card above
+// it, floating over the brew without moving it; the brew's clock rides along
+// at the top of the card (see TeaCompanion).
 export default function ChatDock({
   open,
   onOpenChange,
@@ -35,7 +36,7 @@ export default function ChatDock({
 }: ChatDockProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Lets wide layouts slide the brew aside so the card never covers the timer.
+  // Lets the page know when chat is up (styles can respond to it).
   useEffect(() => {
     document.body.dataset.chat = open ? "open" : "closed";
     return () => {

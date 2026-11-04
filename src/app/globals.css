@@ -2503,14 +2503,6 @@ body::before {
   flex: 0 0 auto;
 }
 
-@media (min-width: 1000px) {
-  .brew-stage {
-    transition: padding-right 0.34s var(--ease-calm);
-  }
-  body[data-chat="open"] .brew-stage {
-    padding-right: 430px;
-  }
-}
 
 .msg-input {
   scrollbar-width: thin;
@@ -2687,11 +2679,6 @@ body::before {
 }
 .dock-panel .qp-btn {
   font-size: 15px;
-}
-@media (min-width: 1000px) {
-  body[data-chat="open"] .brew-stage {
-    padding-right: 570px;
-  }
 }
 @media (max-width: 560px) {
   .dock-panel {
@@ -3681,4 +3668,224 @@ html[data-brew-persona="tease"] .dock {
   .persona-bg * {
     animation: none !important;
   }
+}
+
+/* ── Companion figure (CompanionFigure.tsx) ──────────────────────────────
+   The chosen companion, large, as someone sitting with you rather than a
+   picture on the wall. Wide screens: standing on the left edge, full height,
+   with the brew column moved over to make room. Narrower: in the column,
+   above the tray. A pool of the companion's accent light sits behind them
+   and warms while they're speaking. */
+.companion-fig {
+  position: relative;
+  pointer-events: none;
+  animation: companionArrive 0.9s var(--ease-calm) both;
+}
+.companion-fig img {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: auto;
+  transform-origin: 50% 100%;
+  animation: companionBreathe 7s ease-in-out infinite alternate;
+}
+.companion-fig-light {
+  position: absolute;
+  inset: 8% -6% 0;
+  background: radial-gradient(
+    ellipse 50% 46% at 50% 58%,
+    color-mix(in srgb, var(--gold) 22%, transparent),
+    transparent 70%
+  );
+  opacity: 0.55;
+  transition: opacity 0.8s var(--ease-calm);
+}
+.companion-fig.speaking .companion-fig-light {
+  opacity: 1;
+}
+@keyframes companionArrive {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+/* A slow breath, about the pace you'd want the drinker to settle into. */
+@keyframes companionBreathe {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(1.012);
+  }
+}
+
+.companion-fig.side {
+  display: none;
+}
+.companion-fig.inline {
+  width: clamp(120px, 19vh, 210px);
+  /* Still first in the column, so it keeps the column's auto top margin.
+     The tray scene below has open air above the kettle; the companion
+     settles into it, so the timer and Start stay in reach. */
+  margin: auto auto -7vh;
+}
+.companion-fig.inline.setup {
+  width: clamp(110px, 17vh, 170px);
+  margin-bottom: 4px;
+}
+
+@media (min-width: 1100px) {
+  .brew-modal[data-figure] {
+    --fig-h: min(84vh, 820px);
+    --fig-w: calc(var(--fig-h) * 0.75);
+  }
+  .companion-fig.inline {
+    display: none;
+  }
+  .companion-fig.side {
+    position: absolute;
+    left: max(0px, calc(50% - 720px));
+    bottom: 0;
+    z-index: 1;
+    display: block;
+    width: var(--fig-w);
+  }
+  /* The brew column moves right of the companion, still centred in the
+     space that's left. */
+  .brew-modal[data-figure] .brew-stage {
+    padding-left: calc(var(--fig-w) * 0.82);
+  }
+  .brew-modal[data-figure] .brew-stage > .companion-fig.inline + * {
+    margin-top: auto;
+  }
+  /* Opening chat: the companion steps back off the left edge, and the brew
+     slides left into the room they leave, so the timer stays in view beside
+     the chat card (540px wide, 16px from the edge). */
+  .brew-stage {
+    transition: padding-left 0.6s var(--ease-calm), padding-right 0.6s var(--ease-calm);
+  }
+  body[data-chat="open"] .brew-stage {
+    padding-right: 580px;
+  }
+  body[data-chat="open"] .brew-modal[data-figure] .brew-stage {
+    padding-left: calc(var(--fig-w) * 0.24);
+  }
+  .companion-fig.side {
+    transition: translate 0.6s var(--ease-calm), opacity 0.6s var(--ease-calm);
+  }
+  body[data-chat="open"] .companion-fig.side {
+    translate: -72% 0;
+    opacity: 0.9;
+  }
+  /* The brew's own timer is in view here, so the copy in the chat card
+     isn't needed. */
+  .dock .chat-brew {
+    display: none;
+  }
+  /* The companion has the left side now; the motifs that lived there step
+     aside. */
+  .brew-modal[data-figure] .pb-incense,
+  .brew-modal[data-figure] .pb-doodles.left {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .companion-fig {
+    animation: companionFade 0.6s ease both;
+  }
+  .companion-fig.side,
+  .brew-stage {
+    transition-duration: 0.001s;
+  }
+  .companion-fig img {
+    animation: none;
+  }
+}
+@keyframes companionFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* The brew, inside the chat: while a brew is open the chat card floats over
+   it rather than pushing it aside, so the step and its clock ride along at
+   the top of the card, with the one control a timed step needs. */
+.chat-brew {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.chat-brew-step {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-family: 'IM Fell English', serif;
+  font-style: italic;
+  font-size: 18px;
+  color: var(--ink-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-brew-time {
+  font-family: 'IM Fell English', serif;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  transition: color 0.3s var(--ease-calm);
+}
+.chat-brew.running .chat-brew-time {
+  color: var(--gold-text);
+}
+/* The last ten seconds: the same slow breath as the mini timer. */
+.chat-brew.urgent .chat-brew-time {
+  color: var(--gold-light);
+  animation: breathe var(--breath) ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-brew.urgent .chat-brew-time {
+    animation: none;
+  }
+}
+.chat-brew-btn {
+  min-height: 34px;
+  padding: 4px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s var(--ease-calm), color 0.2s var(--ease-calm), border-color 0.2s var(--ease-calm);
+}
+.chat-brew-btn:hover {
+  border-color: var(--gold-light);
+  color: var(--ink);
+}
+.chat-brew-btn.primary {
+  border-color: var(--gold-deep);
+  background: var(--gold-deep);
+  color: white;
+}
+.chat-brew-btn:focus-visible {
+  outline: 2px solid var(--gold-light);
+  outline-offset: 2px;
+}
+.chat-brew-done {
+  font-size: 14px;
+  color: var(--gold-text);
 }

@@ -12,6 +12,7 @@ import { VOICES } from "@/lib/voices";
 import BrewScene, { BrewSceneMode } from "./BrewScene";
 import TeawareIconArt from "./TeawareIcon";
 import PersonaBackdrop from "./PersonaBackdrop";
+import CompanionFigure from "./CompanionFigure";
 
 interface BrewModalProps {
   open: boolean;
@@ -171,8 +172,18 @@ function BrewModal({
 
   return (
     <div className={`brew-overlay${open ? " open" : ""}`} id="brewOverlay" data-persona={companion.id}>
-      <div className="brew-modal">
+      <div className="brew-modal" data-figure={companion.id !== "original" ? "" : undefined}>
         <PersonaBackdrop persona={companion.id} waiting={mode === "wait" && !paused} />
+        {companion.id !== "original" && (
+          // Wide screens: the companion stands large on the left, beside
+          // the brew, from the moment they're picked to the last cup.
+          <CompanionFigure
+            key={`side-${companion.id}`}
+            persona={companion.id}
+            speaking={narration.guideSpeaking}
+            className="side"
+          />
+        )}
         <div className="brew-modal-header">
           <span className="brew-modal-title" id="brewModalTitle">
             {title}
@@ -230,6 +241,16 @@ function BrewModal({
         )}
 
         <div className="brew-stage">
+          {companion.id !== "original" && (
+            // Narrower screens: the same companion, in the column above
+            // the tray (smaller on the setup pages, where the questions are).
+            <CompanionFigure
+              key={`inline-${companion.id}`}
+              persona={companion.id}
+              speaking={narration.guideSpeaking}
+              className={`inline${isSetup ? " setup" : ""}`}
+            />
+          )}
           <div className="brew-scene">
             {step && !isSetup && (
               <BrewScene

@@ -211,6 +211,24 @@ a pair of eyes. Fonts, ground, layout and controls never change. Motion runs
 only while a steep is timing, and stops under reduced motion. Original sets
 nothing.
 
+The companion is also there in person (`CompanionFigure.tsx`): the user's own
+sepia illustrations (`public/companions/*.webp`, already cut out), drawn
+large, from the moment they're picked on the "Who's brewing with you?" page
+to the last cup. At 1100px and up they stand on the left edge at most of the
+screen's height and the brew column moves right to make room. Opening chat
+there slides the companion most of the way off the left edge and the brew
+left into the room they leave, so the timer stays in view beside the chat
+card; closing it brings them back. Narrower, where the chat card covers the
+brew, the step, its clock and its Start/Pause ride along at the top of the
+card instead (`.chat-brew`). Narrower, they sit in the
+column above the tray, settling into the open space over the kettle so the
+timer and Start stay in reach. A soft pool of the companion's accent light
+sits behind them and warms while the narration is speaking. Motion: they
+arrive with a short fade, rise and unblur when picked, then breathe very
+slowly (1.2% scale, 7s); under reduced motion they only fade in. The motifs
+that lived on the left (incense, the left doodles) give way to the figure on
+wide screens. Original shows no figure.
+
 ## Do's and Don'ts
 
 - **Do** keep the tray illustration as the single visual world; a new

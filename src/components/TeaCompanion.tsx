@@ -1083,6 +1083,28 @@ export default function TeaCompanion() {
         musicVolume={ambient.volume}
         onMusicVolume={ambient.setVolume}
       >
+        {/* The brew rides along: chat floats over it, so the step and its
+            clock (and the one control a timed step needs) sit at the top. */}
+        {modalOpen && miniActive && (
+          <div
+            className={`chat-brew${miniSteaming ? " running" : ""}${miniUrgent && !finished ? " urgent" : ""}`}
+            aria-label="Brew in progress"
+            role="group"
+          >
+            <span className="chat-brew-step">{miniStepLabel}</span>
+            {miniIsTimed && <span className="chat-brew-time">{miniTimeLabel}</span>}
+            {miniIsTimed && !finished && (
+              <button
+                type="button"
+                className={`chat-brew-btn${!started || paused ? " primary" : ""}`}
+                onClick={started ? brewPauseResume : startBrewTimer}
+              >
+                {!started ? "Start" : paused ? "Resume" : "Pause"}
+              </button>
+            )}
+            {miniIsTimed && finished && <span className="chat-brew-done">Time&rsquo;s up</span>}
+          </div>
+        )}
         {/* Only while there's an actual countdown running (a rinse or a
             steep) — that's real dead time, unlike the untimed "measure your
             leaves" or "pour & enjoy" steps, which are hands-on rather than
